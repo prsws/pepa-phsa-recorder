@@ -1,7 +1,8 @@
 """Database access.
 
 Plain parameterised SQL via psycopg 3. Every table and view is
-schema-qualified (phsa.x) even though the role's search_path is set.
+schema-qualified (phsa.x) even though the role's search_path is set
+(server-side, spec section 3) — belt and braces.
 
 Rules the code lives by (spec sections 0 and 3):
 - The role phsa_app cannot DELETE/TRUNCATE, and can UPDATE only
@@ -13,6 +14,7 @@ Rules the code lives by (spec sections 0 and 3):
 
 import logging
 
+import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
@@ -21,14 +23,7 @@ log = logging.getLogger("phsa")
 
 def open_connection(dsn: str):
     """One autocommit=False connection; schema-qualified regardless of role."""
-    import psycopg
-
     conn = psycopg.connect(dsn, row_factory=dict_row, autocommit=False)
-    conn.execute("SET search_path = phsa, public")
-    return conn
-
-
-def _configure(conn):
     conn.execute("SET search_path = phsa, public")
     return conn
 
@@ -41,9 +36,16 @@ class AppPool:
     """
 
     def __init__(self, dsn: str):
-        self._pool = ConnectionPool(dsn, min_size=1, max_size=4, open=False,
-                                    kwargs={"row_factory": dict_row},
-                                    configure=_configure)
+        self._pool = ConnectionPool(
+            dsn,
+            min_size=1,
+            max_size=4,
+            open=False,
+            kwargs={"row_factory": dict_row},
+            # configure may not leave the connection in a transaction
+            # (psycopg_pool discards such connections); search_path is
+            # set per session in the server role definition instead.
+        )
 
     def get(self):
         """A pooled connection in an open transaction (autocommit off)."""
@@ -52,7 +54,7 @@ class AppPool:
         return self._pool.getconn()
 
     def put(self, conn) -> None:
-        self._pool.putconn(conn, close=False)
+        self._pool.putconn(conn)
 
     def close(self) -> None:
         self._pool.close()

@@ -15,7 +15,13 @@ def create_app(config=None) -> Flask:
     """Application factory. Reads env vars once; refuses to start without PHSA_DSN."""
     cfg = config if config is not None else load_config()
 
-    app = Flask(__name__, static_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), "static"))
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    app = Flask(
+        __name__,
+        root_path=repo_root,
+        template_folder=os.path.join(repo_root, "templates"),
+        static_folder=os.path.join(repo_root, "static"),
+    )
     app.config["PHSA_CONFIG"] = cfg
 
     pool = AppPool(cfg.dsn)

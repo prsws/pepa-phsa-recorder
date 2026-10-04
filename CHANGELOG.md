@@ -13,16 +13,23 @@
   `PHSA_TEST_DSN` optional (tests skip if unset), `PHSA_HOST`/`PHSA_PORT`
   with spec defaults. DSNs are never printed or logged.
 - `GET /healthz`: 200 ok on `SELECT 1`, 503 otherwise — the only use of
-  `PHSA_DSN` in M0.
+  `PHSA_DSN` in M0. Placeholder `GET /` renders the base page (Pico, test-data
+  banner) with no database query.
 - Vendored `static/vendor/htmx.min.js` (4.0.0) and `pico.min.css` (2.1.1)
   with `static/vendor/VENDORED.md` (name, version, URL, sha256).
-- M0 tests written: `/healthz` 200; grant proofs against `phsa_test`
-  (DELETE/TRUNCATE denied, UPDATE of non-`superseded_by` denied,
-  `superseded_by` update permitted, INSERT into `record_confirmation` denied).
-
-Status: **partially verified** — the `/healthz` contract (200 on `SELECT 1`,
-503 otherwise) is covered by tests that run without a database (stub pool) and
-pass; the 5 grant tests and the live `/healthz` 200 test are written but skip
-on this machine because both DSNs fail with
-`FATAL: password authentication failed for user "phsa_app"`. See QUESTIONS.md.
-They will run and be proven as soon as the database accepts the credentials.
+- M0 tests, all passing (8 passed, 0 skipped) against the live databases:
+  - `/healthz` is 200 (live `SELECT 1`); endpoint contract (200/503) also
+    covered by stub-pool tests that run without a database.
+  - Grant proofs as `phsa_app` against `phsa_test`: `DELETE FROM phsa.condition`
+    → `insufficient_privilege`; `TRUNCATE phsa.condition` → `insufficient_privilege`;
+    `UPDATE phsa.condition SET code_text = 'x'` → `insufficient_privilege`;
+    `UPDATE ... SET superseded_by` → permitted; `INSERT INTO phsa.record_confirmation`
+    → `insufficient_privilege`. Each runs in a transaction that is rolled back;
+    none commits.
+- Fixed during verification: the `.env` credential typo (owner-side, see
+  QUESTIONS.md); a pool `configure` that left connections INTRANS (psycopg_pool
+  discarded them — search_path is set server-side on the role instead); a
+  `putconn(close=...)` argument removed in psycopg-pool 3.3; template folder
+  pointing at `app/templates` instead of the repo's `templates/`.
+- Status: **M0 complete.** No writes were made to the real database (only the
+  `/healthz` SELECT 1). M1 not started.

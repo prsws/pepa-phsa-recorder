@@ -33,8 +33,7 @@ def _probe_pool(pool) -> bool:
 
 @bp.get("/")
 def index():
-    if not _probe_pool(current_app.extensions["phsa_pool"]):
-        return Response("503 database unreachable\n", status=503, mimetype="text/plain")
+    # M0 placeholder: no database query (the subject list arrives with M1).
     return render_template("index.html")
 
 

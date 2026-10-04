@@ -11,9 +11,9 @@ The only statement that writes is the permitted superseded_by UPDATE on a
 nonexistent id, which matches 0 rows and commits nothing.
 """
 
-import uuid
-
 import psycopg
+import pytest
+import uuid
 
 
 def test_delete_forbidden(conn):
@@ -32,7 +32,9 @@ def test_update_non_pointer_column_forbidden(conn):
 
 
 def test_update_superseded_by_permitted(conn):
-    new_id, old_id = uuid.uuid7(), uuid.uuid7()
+    # The role's grants are what this proves: any uuid works, so use v4
+    # (both values are nonexistent rows, so the UPDATE matches 0 rows).
+    new_id, old_id = uuid.uuid4(), uuid.uuid4()
     # A nonexistent id: the UPDATE is permitted but matches 0 rows and writes nothing.
     assert conn.execute(
         "SELECT count(*) FROM phsa.condition WHERE id = %s", (old_id,)
@@ -48,5 +50,5 @@ def test_record_confirmation_insert_forbidden(conn):
         conn.execute(
             "INSERT INTO phsa.record_confirmation (source_record_id, action, confirmed_by) "
             "VALUES (%s, 'confirmed', 'grant-test')",
-            (uuid.uuid7(),),
+            (uuid.uuid4(),),
         )
