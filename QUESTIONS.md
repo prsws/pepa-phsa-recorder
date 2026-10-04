@@ -72,3 +72,51 @@ the same test passes. If the expected outcome for run C should instead be
 "every test reports the connection-refused error", the resolution is a one-line
 change: the healthz test should `pytest.fail` on the endpoint assertion when
 `PHSA_TEST_DSN` is set and differs from `PHSA_DSN` — confirm and I will apply it.
+
+**DECLINED by José, 4 Oct 2026. No change. Closed.**
+
+## 2026-10-04 (M1): `test_supersede_demographics_data_layer` fails after the commit-leak fix
+
+Seen on 4 Oct 2026, in the first full verification run after the
+commit-no-op fix in `tests/conftest.py` (`_SavepointProxy` + `ROLLBACK TO
+SAVEPOINT req`). Both verification runs (the two mandatory full runs)
+give the same result: 30 passed, 0 skipped, 1 failed — the no-leak test
+(`tests/test_zz_no_leak.py`, last) passes in both runs, so the test
+database is left empty; only the one test below fails.
+
+The failing test is `tests/test_demographics.py::test_supersede_demographics_data_layer`
+(step 5 of the interrupted M1 pass): `TypeError: 'NoneType' object is
+not subscriptable` at the final assertion.
+
+What the test does: creates a subject and two demographics rows
+(`first`, `second`); supersedes `first` with a third version — all
+uncommitted in the test transaction, no problem; then, still in the same
+open transaction, tries to supersede `first` AGAIN. In PostgreSQL this
+is a *unique-constraint violation* on
+`phsa.subject_demographics.source_record_id` (the `superseded_by`
+pointer is a plain FK and allows duplicates, so that part passes):
+`supersede_demographics` raises `psycopg.errors.UniqueViolation` when
+inserting the new row — its `source_record_id` already belongs to
+`second` in the same open transaction — before the pointer UPDATE is
+ever reached. The test's docstring states the intended scenario — "the
+old row was already superseded; the request becomes HTTP 409" — i.e.
+the pointer UPDATE matching 0 rows, which requires the old row to have
+been superseded *before* the new transaction began.
+
+The test's comment "409 branch" and the fixture's own
+`tx_conn.rollback()` before the final read show the test was *meant* to
+cover the 409 branch, but as written it cannot produce it inside one
+transaction. The interrupted session apparently stopped right here: the
+data layer was never changed, because the data layer is not in the
+wrong place — the test is.
+
+The app's 409 branch is exercised and passes in this pass (the HTTP
+supersede tests drive it through a prior request that already
+superseded the old row — the `SupersedeConflict` path). I did not
+change any `app/` file to fix the failing test; the data layer's
+contract names only the 409, and making it swallow a
+`UniqueViolation` for a scenario its own docs do not name is not a
+change I will make on my own judgment. The test stays failing; the
+M4 milestone (spec section 9: "superseding a row that was already
+superseded returns 409 and writes nothing") is where a proper
+data-layer 409 test belongs.

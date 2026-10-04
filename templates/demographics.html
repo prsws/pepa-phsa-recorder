@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Demographics · {{ subject.label }} · PHSA Recorder{% endblock %}
+{% block content %}
+<article>
+  <h1>Demographics — {{ subject.label }}</h1>
+  {% if errors %}
+  <article class="negative">
+    {% for e in errors %}<p>{{ e }}</p>{% endfor %}
+  </article>
+  {% endif %}
+
+  {% if current %}
+  <h2>Current</h2>
+  <table class="striped">
+    <tbody>
+      <tr><th>Family name</th><td>{{ current.family_name or "—" }}</td></tr>
+      <tr><th>Given name</th><td>{{ current.given_name or "—" }}</td></tr>
+      <tr><th>Usual name</th><td>{{ current.usual_name or "—" }}</td></tr>
+      <tr><th>Sex</th><td>{{ current.sex or "—" }}</td></tr>
+      <tr><th>Birth year</th><td>{{ current.birth_year if current.birth_year is not none else "—" }}</td></tr>
+      <tr><th>Birth date</th><td>{{ current.birth_date.strftime("%Y-%m-%d") if current.birth_date else "—" }}</td></tr>
+      <tr><th>Home municipality</th><td>{{ current.home_municipality or "—" }}</td></tr>
+      <tr><th>Preferred language</th><td>{{ current.preferred_language or "—" }}</td></tr>
+    </tbody>
+  </table>
+  {% endif %}
+
+  <h2>{% if mode == "supersede" %}Supersede (new version){% else %}Create{% endif %}</h2>
+  <form method="post" action="/subjects/{{ subject.id }}/demographics">
+    <label>
+      Family name <small>(both surnames kept whole)</small>
+      <input type="text" name="family_name" value="{{ form.family_name or '' }}"
+             {% if 'family_name' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'family_name' in field_errors %}<small>{{ field_errors['family_name'] }}</small>{% endif %}
+    </label>
+    <label>
+      Given name
+      <input type="text" name="given_name" value="{{ form.given_name or '' }}"
+             {% if 'given_name' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'given_name' in field_errors %}<small>{{ field_errors['given_name'] }}</small>{% endif %}
+    </label>
+    <label>
+      Usual name <small>(e.g. Don Efra)</small>
+      <input type="text" name="usual_name" value="{{ form.usual_name or '' }}"
+             {% if 'usual_name' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'usual_name' in field_errors %}<small>{{ field_errors['usual_name'] }}</small>{% endif %}
+    </label>
+    <label>
+      Sex
+      <select name="sex">
+        <option value="" {% if not form.sex %}selected{% endif %}>—</option>
+        {% for s in sex_options %}
+        <option value="{{ s }}" {% if form.sex == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Birth year <small>(blank if unknown)</small>
+      <input type="number" step="1" name="birth_year" value="{{ form.birth_year or '' }}"
+             {% if 'birth_year' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'birth_year' in field_errors %}<small aria-invalid="true">{{ field_errors['birth_year'] }}</small>{% endif %}
+    </label>
+    <label>
+      Birth date <small>(blank if unknown)</small>
+      <input type="date" name="birth_date" value="{{ form.birth_date or '' }}"
+             {% if 'birth_date' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'birth_date' in field_errors %}<small aria-invalid="true">{{ field_errors['birth_date'] }}</small>{% endif %}
+    </label>
+    <label>
+      Home municipality
+      <input type="text" name="home_municipality" value="{{ form.home_municipality or '' }}"
+             {% if 'home_municipality' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'home_municipality' in field_errors %}<small>{{ field_errors['home_municipality'] }}</small>{% endif %}
+    </label>
+    <label>
+      Preferred language <small>(BCP-47, e.g. es)</small>
+      <input type="text" name="preferred_language" value="{{ form.preferred_language or '' }}"
+             {% if 'preferred_language' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'preferred_language' in field_errors %}<small>{{ field_errors['preferred_language'] }}</small>{% endif %}
+    </label>
+    <p>
+      <button class="secondary" type="submit">
+        {% if mode == "supersede" %}Supersede (new version){% else %}Create{% endif %}
+      </button>
+      <a href="/subjects/{{ subject.id }}">cancel</a>
+    </p>
+  </form>
+</article>
+{% endblock %}

@@ -1,5 +1,107 @@
 # CHANGELOG
 
+## M1 (2026-10-04) — subjects and demographics (create, view, supersede), and the test commit-leak fix
+
+M1 proper (spec section 10: subjects and demographics — create, view,
+supersede) plus one serious fix to the interrupted M1 work already on
+disk.
+
+### The commit leak, and its fix (tests/conftest.py)
+
+The interrupted M1 pass had handed the app the test's OWN connection
+(`_SharedPool` in `tests/conftest.py` returned the raw shared
+connection). The request handler then called `conn.commit()` on it. A
+commit is final: the fixture's later `rollback()` undoes nothing, so
+rows were committed to the test database and then broke tests that
+expect empty tables — and the app role cannot delete them.
+
+Fixed in `tests/conftest.py` only (no app-code change):
+
+- `_SharedPool.get()` now executes `SAVEPOINT req` on the shared
+  connection and returns a small proxy (`_SavepointProxy`), not the raw
+  connection.
+- the proxy's `commit()` does nothing (spec section 9: "commit becomes
+  a no-op" in HTTP tests);
+- the proxy's `rollback()` executes `ROLLBACK TO SAVEPOINT req`, which
+  undoes exactly that request and re-arms the savepoint for the next;
+- every other attribute passes through to the real connection via
+  `__getattr__`;
+- the fixture still does the real `rollback()` and `close()` at the end.
+
+A new last-running test `tests/test_zz_no_leak.py` opens a NEW
+connection to `PHSA_TEST_DSN` and asserts `phsa.source_record`,
+`phsa.subject` and `phsa.subject_demographics` each hold 0 rows,
+proving no test in the session left a row behind. Both mandatory
+verification runs give the same result (see below) and the no-leak
+test passes in both: the test database is left empty.
+
+Also: `open_test_transaction` removed from `app/queries.py` — test
+helpers live under `tests/`, never under `app/`.
+
+### M1 work (kept from the interrupted pass; verified this pass)
+
+- `app/queries.py` (new data layer): `create_subject`,
+  `list_subjects`, `get_subject`, `get_current_demographics`,
+  `create_demographics`, `supersede_demographics` (the 4.2 recipe: new
+  source record + typed row, then the single permitted
+  `UPDATE ... SET superseded_by` pointer; 0 rows matched →
+  `SupersedeConflict` → HTTP 409). All schema-qualified, all take a
+  connection and never commit. `is_test_data` is a constant `true` in
+  every INSERT, never taken from the form.
+- `app/fhir.py`: `patient_json` (spec 5.1) with the HTEST tag (5.0);
+  blank fields are absent from the JSON, never `null`/`""`.
+- `app/validation.py`: `validate_subject` (label required;
+  `is_test_data` deliberately ignored) and `validate_demographics`
+  (all optional; `birth_year`/`birth_date` must agree if both given —
+  mirrors the schema CHECK).
+- `app/routes.py`: `GET /` (subject list with current counts +
+  Create link), `GET,POST /subjects/new`, `GET /subjects/<id>`
+  (overview), `GET,POST /subjects/<id>/demographics` (create if none,
+  otherwise supersede). Page rules per spec 6.1: CRS verb labels only,
+  the fixed test-data banner in `base.html` (every page), 422 with the
+  form re-rendered and the user's input kept, 409 for a
+  duplicate `fixture_id` / already-superseded row (friendly text, not a
+  500), a plain 500 page on unexpected database errors, and the Origin
+  check on every POST.
+- `templates/` (new): `subject.html`, `subject_new.html`,
+  `demographics.html`, `error.html`; `index.html` extended with the
+  counts and the Create link.
+- `tests/test_subjects.py`, `tests/test_demographics.py` (new):
+  create subject (row content, blank-stays-NULL, `is_test_data`
+  constant against a forged form value, 422 label-required writes
+  nothing, duplicate fixture_id → 409 friendly, Origin 403);
+  demographics create via HTTP (exactly one new source record, ids
+  match, `is_test_data` true, HTEST in `resource_raw`),
+  create-then-supersede page flow, supersede via HTTP (pointer set,
+  current view shows only the new row), 422 birth mismatch writes
+  nothing (row counts before/after), agreeing year+date accepted,
+  404s, index lists.
+
+### Verification and one remaining failure (see QUESTIONS.md)
+
+The commit-leak fix holds: two full `.venv/bin/python -m pytest -v`
+runs, same result, 0 skipped; the no-leak test passes in both and the
+database is empty afterwards.
+
+One test still fails, deterministically, in both runs:
+`tests/test_demographics.py::test_supersede_demographics_data_layer`
+— the pre-existing (interrupted-pass) data-layer 409 test. As written
+it cannot produce its intended scenario inside one transaction:
+superseding a row that already has a second current version in the
+same open transaction hits the `source_record_id` unique constraint
+before the pointer UPDATE, so it raises `UniqueViolation` instead of
+`SupersedeConflict`; the pointer UPDATE matching 0 rows (the 409
+branch) needs the old row superseded before the transaction began. The
+app's 409 branch itself is exercised and passes via the HTTP
+supersede tests. Full diagnosis and the deferral to M4 are in
+`QUESTIONS.md` (2026-10-04 M1 entry); no `app/` file was changed to
+"fix" it.
+
+Result of both verification runs (identical): **30 passed, 0 skipped,
+1 failed** (`test_supersede_demographics_data_layer`, pre-existing
+test-vs-data-layer mismatch, documented above). Nothing was written to
+the real database; the test database ends empty. M2 not started.
+
 ## Pre-M1 (2026-10-04) — skip/fail semantics and /healthz robustness
 
 Three fixes to M0 code (no milestone work; M1 not started):

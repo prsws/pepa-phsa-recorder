@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Create a subject · PHSA Recorder{% endblock %}
+{% block content %}
+<article>
+  <h1>Create a subject</h1>
+  {% if errors %}
+  <article class="negative">
+    {% for e in errors %}<p>{{ e }}</p>{% endfor %}
+  </article>
+  {% endif %}
+  <form method="post" action="/subjects/new">
+    <label>
+      label <small>(required)</small>
+      <input type="text" name="label" value="{{ form.get('label', '') }}"
+             {% if 'label' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'label' in field_errors %}<small aria-invalid="true">{{ field_errors['label'] }}</small>{% endif %}
+    </label>
+    <label>
+      fixture id <small>(optional, e.g. SUBJ-01)</small>
+      <input type="text" name="fixture_id" value="{{ form.get('fixture_id', '') }}"
+             {% if 'fixture_id' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'fixture_id' in field_errors %}<small aria-invalid="true">{{ field_errors['fixture_id'] }}</small>{% endif %}
+    </label>
+    <p><button class="secondary" type="submit">Create</button></p>
+  </form>
+  <p><a href="/">back to subjects</a></p>
+</article>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ subject.label }} · PHSA Recorder{% endblock %}
+{% block content %}
+<article>
+  <h1>{{ subject.label }}</h1>
+  <p>
+    Fixture id: {{ subject.fixture_id or "—" }}
+    · created {{ subject.created_at.strftime("%Y-%m-%d") }}
+  </p>
+
+  <h2>Current demographics</h2>
+  {% if demo %}
+  <table class="striped">
+    <tbody>
+      <tr><th>Family name</th><td>{{ demo.family_name or "—" }}</td></tr>
+      <tr><th>Given name</th><td>{{ demo.given_name or "—" }}</td></tr>
+      <tr><th>Usual name</th><td>{{ demo.usual_name or "—" }}</td></tr>
+      <tr><th>Sex</th><td>{{ demo.sex or "—" }}</td></tr>
+      <tr><th>Birth year</th><td>{{ demo.birth_year if demo.birth_year is not none else "—" }}</td></tr>
+      <tr><th>Birth date</th><td>{{ demo.birth_date.strftime("%Y-%m-%d") if demo.birth_date else "—" }}</td></tr>
+      <tr><th>Home municipality</th><td>{{ demo.home_municipality or "—" }}</td></tr>
+      <tr><th>Preferred language</th><td>{{ demo.preferred_language or "—" }}</td></tr>
+      <tr><th>Effective class</th><td><span class="eff-tag">{{ demo.effective_class }}</span></td></tr>
+    </tbody>
+  </table>
+  <p><a class="button secondary" href="/subjects/{{ subject.id }}/demographics">Supersede (new version)</a></p>
+  {% else %}
+  <p>No demographics yet.</p>
+  <p><a class="button" href="/subjects/{{ subject.id }}/demographics">Create demographics</a></p>
+  {% endif %}
+
+  <h2>Current conditions</h2>
+  {% if conditions %}
+  <table class="striped">
+    <thead><tr><th>Wording</th><th>Status</th><th>Effective class</th></tr></thead>
+    <tbody>
+      {% for c in conditions %}
+      <tr><td>{{ c.code_text }}</td><td>{{ c.clinical_status }}</td><td><span class="eff-tag">{{ c.effective_class }}</span></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>None.</p>
+  {% endif %}
+
+  <h2>Current medication requests</h2>
+  {% if medications %}
+  <table class="striped">
+    <thead><tr><th>Medication</th><th>Status</th><th>Effective class</th></tr></thead>
+    <tbody>
+      {% for m in medications %}
+      <tr><td>{{ m.medication_text }}</td><td>{{ m.status }}</td><td><span class="eff-tag">{{ m.effective_class }}</span></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>None.</p>
+  {% endif %}
+
+  <p><a href="/">back to subjects</a></p>
+</article>
+{% endblock %}

@@ -1,7 +1,26 @@
 {% extends "base.html" %}
+{% block title %}Subjects · PHSA Recorder{% endblock %}
 {% block content %}
 <article>
   <h1>Subjects</h1>
-  <p>No subjects yet. (Creating a subject arrives with milestone M1.)</p>
+  <table class="striped">
+    <thead>
+      <tr><th>Label</th><th>Fixture id</th><th>Current conditions</th><th>Current medications</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for s in subjects %}
+      <tr>
+        <td><a href="/subjects/{{ s.id }}">{{ s.label }}</a></td>
+        <td>{{ s.fixture_id or "" }}</td>
+        <td>{{ s.condition_count }}</td>
+        <td>{{ s.medication_count }}</td>
+        <td><a href="/subjects/{{ s.id }}">view</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5">No subjects yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p><a class="button" href="/subjects/new">Create a subject</a></p>
 </article>
 {% endblock %}
