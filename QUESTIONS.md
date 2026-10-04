@@ -42,3 +42,33 @@ tests/test_healthz_contract.py::test_healthz_200_when_reachable PASSED
 
 (No schema, database, or `.env` changes were made by the builder to achieve
 this; only test/app code fixes, none of which affect the database.)
+
+## 2026-10-04 (Pre-M1): run C — `test_healthz_200` fails on the *endpoint* assertion, not with the connection error
+
+Pre-M1 verification run C sets `PHSA_TEST_DSN=postgresql://phsa_app:x@127.0.0.1:1/phsa_test`.
+Expected: "database tests FAILED (connection refused), 0 skipped, stub tests
+pass."
+
+What happened: the 5 grant tests fail as expected — first line of the error
+is `psycopg.OperationalError: connection failed: connection to server at
+"127.0.0.1", port 1 failed: Connection refused` (pytest labels an exception
+raised in a non-yield fixture `ERROR`, not `FAILED`; they fail to connect and
+run nothing). The 3 stub-pool tests pass. But `test_healthz_200` also fails,
+with `AssertionError: endpoint returned 503`, *after* its direct probe of the
+real database succeeded.
+
+Why: the test's Flask app pool is built from `PHSA_TEST_DSN` (spec section 9:
+no test may write to the real database), and the test rebinds that pool to the
+(test) DSN before calling the endpoint — so the endpoint's own `SELECT 1` probe
+goes at the deliberately broken test DSN and correctly returns 503. That is
+the endpoint working *as designed* in response to a broken test DSN, not a
+connection failure of the real database. The instruction was to fix the test or
+app code rather than the database; making the endpoint ignore a broken DSN (or
+the test ignore the endpoint's answer) would change tested behavior, so I have
+documented the deviation here instead.
+
+In the normal environment (run A) and with `PHSA_TEST_DSN` unset/empty (run B)
+the same test passes. If the expected outcome for run C should instead be
+"every test reports the connection-refused error", the resolution is a one-line
+change: the healthz test should `pytest.fail` on the endpoint assertion when
+`PHSA_TEST_DSN` is set and differs from `PHSA_DSN` — confirm and I will apply it.

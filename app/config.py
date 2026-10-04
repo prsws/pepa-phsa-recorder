@@ -7,7 +7,7 @@ DSNs contain the password and come from the environment only (or a git-ignored
 import os
 from dataclasses import dataclass
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 
 class ConfigError(RuntimeError):
@@ -47,16 +47,30 @@ def load_config_for_tests() -> Config:
     PHSA_DSN is the SELECT 1 in /healthz, which the healthz test drives
     directly. Tests use PHSA_TEST_DSN (spec section 9) — no test may ever
     write to the real database.
+
+    Spec section 2: tests skip with a clear message when PHSA_TEST_DSN is
+    unset or empty. So when it is unset or empty, test_dsn is None and the
+    database tests skip; the pool (and the stub-pool tests) still work, so
+    tests that need no database run and pass.
+
+    Note: os.environ.get(key, default) returns the default only when the
+    variable is ABSENT; `PHSA_TEST_DSN=` (empty, but present) yields "".
+    dotenv_values() likewise returns "" for an empty assignment and drops
+    the key only when the line is absent. This helper must treat both as
+    unset, so it reads dotenv_values() directly, and the result is checked
+    with `or None`.
     """
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    values = dotenv_values(os.path.join(repo_root, ".env"))
     load_dotenv(os.path.join(repo_root, ".env"), override=False)
 
     test_dsn = os.environ.get("PHSA_TEST_DSN")
-    if not test_dsn:
-        raise ConfigError("PHSA_TEST_DSN is not set; tests need the test database")
+    if test_dsn is None:
+        test_dsn = values.get("PHSA_TEST_DSN")
+    test_dsn = test_dsn or None  # unset or empty -> None -> tests skip
 
     return Config(
-        dsn=test_dsn,
+        dsn=test_dsn or "",
         test_dsn=test_dsn,
         host="127.0.0.1",
         port=0,

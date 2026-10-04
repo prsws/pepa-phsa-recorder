@@ -14,7 +14,13 @@ bp = Blueprint("main", __name__)
 
 
 def _probe_pool(pool) -> bool:
-    """SELECT 1 through the pool; never commits; returns reachability."""
+    """SELECT 1 through the pool; never commits; returns reachability.
+
+    Any failure — including a failure of the rollback in the finally block
+    on a broken connection — must not escape: /healthz returns 503, never
+    500. The connection is always handed back with pool.put(conn).
+    """
+    conn = None
     try:
         conn = pool.get()
     except Exception as e:
@@ -26,7 +32,10 @@ def _probe_pool(pool) -> bool:
         log.error("database probe failed: %s: %s", type(e).__name__, e)
         return False
     finally:
-        conn.rollback()  # never commit; nothing was written
+        try:
+            conn.rollback()  # never commit; nothing was written
+        except Exception as e:
+            log.error("rollback after probe failed: %s: %s", type(e).__name__, e)
         pool.put(conn)
     return True
 

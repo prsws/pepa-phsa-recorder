@@ -36,9 +36,14 @@ class AppPool:
     """
 
     def __init__(self, dsn: str):
+        self._conninfo = dsn
         self._pool = ConnectionPool(
             dsn,
-            min_size=1,
+            # min_size=0: connections are created on demand. A broken
+            # DSN then fails fast (one attempt per request) instead of
+            # blocking until the pool's init timeout (num_workers x 6 s
+            # per pre-connection) turns a 503 into a 30-second hang.
+            min_size=0,
             max_size=4,
             open=False,
             kwargs={"row_factory": dict_row},
@@ -47,11 +52,25 @@ class AppPool:
             # set per session in the server role definition instead.
         )
 
+    @property
+    def conninfo(self) -> str:
+        return self._conninfo
+
+    @conninfo.setter
+    def conninfo(self, dsn: str) -> None:
+        """Rebind the pool to a new DSN (used by tests; pool is lazily opened)."""
+        self._conninfo = dsn
+        self._pool.conninfo = dsn
+
     def get(self):
-        """A pooled connection in an open transaction (autocommit off)."""
+        """A pooled connection in an open transaction (autocommit off).
+
+        Bounded wait: a broken DSN must fail fast (seconds), not block a
+        request for the pool's full 30 s timeout.
+        """
         if self._pool.closed:
             self._pool.open(wait=10)
-        return self._pool.getconn()
+        return self._pool.getconn(timeout=10)
 
     def put(self, conn) -> None:
         self._pool.putconn(conn)
