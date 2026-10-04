@@ -1,0 +1,14 @@
+/* Custom CSS. Pico conventions are used by the templates; only small
+   additions go here, without overriding --pico-* variables except where
+   unavoidable. */
+
+main.container {
+  max-width: 46rem;
+}
+
+.eff-tag {
+  font-size: 0.75em;
+  border: 1px solid var(--pico-muted-border-color, #888);
+  border-radius: 0.25em;
+  padding: 0 0.35em;
+}
