@@ -715,3 +715,22 @@ def list_subject_history(conn, subject_id: str) -> list[dict]:
     return rows
 
 
+def get_current_condition(conn, condition_id: str) -> dict | None:
+    """One row of the current_condition view (it carries effective_class),
+    or None when that id is not a current version. Read only."""
+    return conn.execute(
+        "SELECT * FROM phsa.current_condition WHERE id = %(id)s",
+        {"id": condition_id},
+    ).fetchone()
+
+
+def get_current_medication_request(conn, medication_request_id: str) -> dict | None:
+    """One row of the current_medication_request view (it carries
+    effective_class), or None when that id is not a current version.
+    Read only."""
+    return conn.execute(
+        "SELECT * FROM phsa.current_medication_request WHERE id = %(id)s",
+        {"id": medication_request_id},
+    ).fetchone()
+
+

@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## M6a (2026-10-05) — htmx fragment responses, server side (spec section 7)
+
+When a request carries `HX-Request: true`, supersede, mark entered-in-error
+and add answer with one table row: the form row on GET and on a 422, the new
+version's row on success, plus the add row after an add. Without the header
+nothing changes. Row templates `_condition_row.html` and `_medication_row.html`
+now carry ids (the pages render them unchanged apart from that).
+`get_current_condition` and `get_current_medication_request` in `app/queries.py`
+(read the current_* view after a write). 17 tests in `tests/test_fragments.py`.
+No `hx-*` attributes and no JavaScript yet (that is the next step).
+
 ## M5b (2026-10-05) — seed script: the real-load path (`--commit --target phsa`)
 
 Written by the reviewer at José's direction, not by the builder.

@@ -52,6 +52,44 @@ log = logging.getLogger("phsa")
 bp = Blueprint("main", __name__)
 
 
+def _is_fragment() -> bool:
+    """True when htmx asked for a piece of a page (spec section 7)."""
+    return request.headers.get("HX-Request") == "true"
+
+
+@bp.app_context_processor
+def _inject_fragment_flag():
+    # Every template can test `fragment`; the two form templates use it.
+    return {"fragment": _is_fragment()}
+
+
+def _row_fragment(kind: str, row_id: str, with_add_row: bool = False):
+    """After a write that htmx asked for: the one table row of the new
+    version, read back from the current_* view. Reads only."""
+    conn = _request_conn()
+    try:
+        if kind == "condition":
+            row = queries.get_current_condition(conn, row_id)
+        else:
+            row = queries.get_current_medication_request(conn, row_id)
+        if row is None:
+            abort(404, description="no such row")
+        subject = queries.get_subject(conn, row["subject_id"])
+    except HTTPException:
+        raise  # the caller (Flask's 404 handler) answers
+    except Exception as e:
+        log.error("database error in row fragment: %s: %s",
+                  type(e).__name__, e)
+        return _error_page("something went wrong")
+    finally:
+        _finish(conn, commit=False)  # reads only; never commit here
+    if kind == "condition":
+        return render_template("_condition_row.html", c=row, subject=subject,
+                               with_add_row=with_add_row)
+    return render_template("_medication_row.html", m=row, subject=subject,
+                           with_add_row=with_add_row)
+
+
 def _probe_pool(pool) -> bool:
     """SELECT 1 through the pool; never commits; returns reachability.
 
@@ -469,7 +507,7 @@ def condition_new_page(id: str):
         subject = queries.get_subject(conn, id)
         if subject is None:
             abort(404, description="no such subject")
-        queries.create_condition(conn, id, fields)
+        new = queries.create_condition(conn, id, fields)
         ok = True
     except HTTPException:
         raise  # the caller (Flask's 404 handler) answers
@@ -478,6 +516,8 @@ def condition_new_page(id: str):
         return _error_page("something went wrong; nothing was saved")
     finally:
         _finish(conn, commit=ok)
+    if _is_fragment() and new is not None:
+        return _row_fragment("condition", str(new["id"]), with_add_row=True)
     return redirect(url_for("main.subject_page", id=id))
 
 
@@ -590,7 +630,7 @@ def condition_supersede_page(id: str):
             return Response(
                 "this version has already been superseded",
                 status=409, mimetype="text/plain")
-        queries.supersede_condition(conn, cond["id"], cond["subject_id"], fields)
+        new = queries.supersede_condition(conn, cond["id"], cond["subject_id"], fields)
         ok = True
     except HTTPException:
         raise  # the caller (Flask's 404 handler) answers
@@ -602,6 +642,8 @@ def condition_supersede_page(id: str):
         return _error_page("something went wrong; nothing was saved")
     finally:
         _finish(conn, commit=ok)
+    if _is_fragment() and new is not None:
+        return _row_fragment("condition", str(new["id"]))
     return redirect(url_for("main.subject_page", id=cond["subject_id"]))
 
 
@@ -725,7 +767,7 @@ def medication_request_new_page(id: str):
         subject = queries.get_subject(conn, id)
         if subject is None:
             abort(404, description="no such subject")
-        queries.create_medication_request(conn, id, fields)
+        new = queries.create_medication_request(conn, id, fields)
         ok = True
     except HTTPException:
         raise  # the caller (Flask's 404 handler) answers
@@ -735,6 +777,8 @@ def medication_request_new_page(id: str):
         return _error_page("something went wrong; nothing was saved")
     finally:
         _finish(conn, commit=ok)
+    if _is_fragment() and new is not None:
+        return _row_fragment("medication", str(new["id"]), with_add_row=True)
     return redirect(url_for("main.subject_page", id=id))
 
 
@@ -837,7 +881,7 @@ def medication_supersede_page(id: str):
             return Response(
                 "this version has already been superseded",
                 status=409, mimetype="text/plain")
-        queries.supersede_medication_request(conn, med["id"], med["subject_id"], fields)
+        new = queries.supersede_medication_request(conn, med["id"], med["subject_id"], fields)
         ok = True
     except HTTPException:
         raise  # the caller (Flask's 404 handler) answers
@@ -849,6 +893,8 @@ def medication_supersede_page(id: str):
         return _error_page("something went wrong; nothing was saved")
     finally:
         _finish(conn, commit=ok)
+    if _is_fragment() and new is not None:
+        return _row_fragment("medication", str(new["id"]))
     return redirect(url_for("main.subject_page", id=med["subject_id"]))
 
 
@@ -875,7 +921,7 @@ def condition_mark_error(id: str):
         cond = queries.get_condition(conn, id)
         if cond is None:
             abort(404, description="no such condition")
-        queries.mark_condition_entered_in_error(conn, cond["id"])
+        new = queries.mark_condition_entered_in_error(conn, cond["id"])
         ok = True
     except HTTPException:
         raise  # the caller (Flask's 404 handler) answers
@@ -889,6 +935,8 @@ def condition_mark_error(id: str):
         return _error_page("something went wrong; nothing was saved")
     finally:
         _finish(conn, commit=ok)
+    if _is_fragment() and new is not None:
+        return _row_fragment("condition", str(new["id"]))
     return redirect(url_for("main.subject_page", id=cond["subject_id"]))
 
 
@@ -915,7 +963,7 @@ def medication_mark_error(id: str):
         med = queries.get_medication_request(conn, id)
         if med is None:
             abort(404, description="no such medication request")
-        queries.mark_medication_request_entered_in_error(conn, med["id"])
+        new = queries.mark_medication_request_entered_in_error(conn, med["id"])
         ok = True
     except HTTPException:
         raise  # the caller (Flask's 404 handler) answers
@@ -929,6 +977,8 @@ def medication_mark_error(id: str):
         return _error_page("something went wrong; nothing was saved")
     finally:
         _finish(conn, commit=ok)
+    if _is_fragment() and new is not None:
+        return _row_fragment("medication", str(new["id"]))
     return redirect(url_for("main.subject_page", id=med["subject_id"]))
 
 

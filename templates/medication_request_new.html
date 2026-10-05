@@ -1,6 +1,7 @@
-{% extends "base.html" %}
+{% extends "_fragment.html" if fragment else "base.html" %}
 {% block title %}{% if mode == "supersede" %}Supersede (new version){% else %}Add a medication request{% endif %} · {{ subject.label }} · PHSA Recorder{% endblock %}
 {% block content %}
+{% if fragment %}<tr id="{% if mode == 'supersede' %}medication-{{ medication_id }}{% else %}medication-add{% endif %}"><td colspan="4">{% endif %}
 <article>
   {% if mode == "supersede" %}
   <h1>New version of an existing medication request — {{ subject.label }}</h1>
@@ -118,4 +119,5 @@
     </p>
   </form>
 </article>
+{% if fragment %}</td></tr>{% endif %}
 {% endblock %}

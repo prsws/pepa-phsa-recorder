@@ -35,21 +35,7 @@
     <thead><tr><th>Wording</th><th>Status</th><th>Onset</th><th>Note</th><th>Effective class</th><th></th></thead>
     <tbody>
       {% for c in conditions %}
-      <tr>
-        <td>{{ c.code_text }}</td>
-        <td>{{ c.clinical_status }}{% if c.verification_status %} ({{ c.verification_status }}){% endif %}</td>
-        <td>{{ c.onset_text if c.onset_text else (c.onset_date.strftime("%Y-%m-%d") if c.onset_date else "—") }}</td>
-        <td>{{ c.note or "—" }}</td>
-        <td><span class="eff-tag">{{ c.effective_class }}</span></td>
-        <td>
-          <a class="button secondary" href="/conditions/{{ c.id }}/supersede">Supersede (new version)</a>
-          {% if c.verification_status != "entered-in-error" %}
-          <form method="post" action="/conditions/{{ c.id }}/mark-error">
-            <button type="submit" class="button secondary">Mark entered-in-error</button>
-          </form>
-          {% endif %}
-        </td>
-      </tr>
+      {% include "_condition_row.html" %}
       {% endfor %}
     </tbody>
   </table>
@@ -72,19 +58,7 @@
     <thead><tr><th>Medication</th><th>Status</th><th>Effective class</th><th></th></tr></thead>
     <tbody>
       {% for m in medications %}
-      <tr>
-        <td>{{ m.medication_text }}</td>
-        <td>{{ m.status }}</td>
-        <td><span class="eff-tag">{{ m.effective_class }}</span></td>
-        <td>
-          <a class="button secondary" href="/medications/{{ m.id }}/supersede">Supersede (new version)</a>
-          {% if m.status != "entered-in-error" %}
-          <form method="post" action="/medications/{{ m.id }}/mark-error">
-            <button type="submit" class="button secondary">Mark entered-in-error</button>
-          </form>
-          {% endif %}
-        </td>
-      </tr>
+      {% include "_medication_row.html" %}
       {% endfor %}
     </tbody>
   </table>
