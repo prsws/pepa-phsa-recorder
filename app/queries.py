@@ -235,6 +235,12 @@ class SupersedeConflict(Exception):
     """The old row was already superseded; the request becomes HTTP 409."""
 
 
+class AlreadyEnteredInError(Exception):
+    """The old row already carries the entered-in-error value; the request
+    becomes HTTP 409 (marking it wrong again would write a pointless
+    duplicate)."""
+
+
 # ---------------------------------------------------------------------------
 # condition (typed row; one source record + one typed row per condition,
 # spec 4.1). Supersede (new version) is M4a.
@@ -361,6 +367,43 @@ def supersede_condition(conn, old_id: str, subject_id: str, d: dict) -> dict:
             "that record was already superseded; nothing was changed"
         )
     return new_row
+
+
+def mark_condition_entered_in_error(conn, old_id: str) -> dict | None:
+    """Spec 4.3: mark a condition wrong is a supersede. A new version is
+    copied from the current one with exactly one value changed —
+    `verification_status` becomes 'entered-in-error' — and the old row is
+    pointed at it, the same way supersede_condition does.
+
+    Every other value is kept exactly, including clinical_status. The dict
+    is built the way create_condition reads it: a date column as ISO text
+    (or None), nothing else converted. Returns None if there is no such row;
+    raises SupersedeConflict if the old row was already superseded; raises
+    AlreadyEnteredInError if it already carries the entered-in-error value.
+    Never commits. Returns the new typed row.
+    """
+    old = get_condition(conn, old_id)
+    if old is None:
+        return None
+    if old["superseded_by"] is not None:
+        raise SupersedeConflict(
+            "this version has already been superseded"
+        )
+    if old["verification_status"] == "entered-in-error":
+        raise AlreadyEnteredInError(
+            "this record is already marked entered-in-error"
+        )
+    d = {
+        "code_text": old["code_text"],
+        "code_system": old["code_system"],
+        "code": old["code"],
+        "clinical_status": old["clinical_status"],
+        "verification_status": "entered-in-error",
+        "onset_text": old["onset_text"],
+        "onset_date": old["onset_date"].isoformat() if old["onset_date"] else None,
+        "note": old["note"],
+    }
+    return supersede_condition(conn, old_id, old["subject_id"], d)
 
 
 # ---------------------------------------------------------------------------
@@ -497,6 +540,52 @@ def supersede_medication_request(conn, old_id: str, subject_id: str, d: dict) ->
             "that record was already superseded; nothing was changed"
         )
     return new_row
+
+
+def mark_medication_request_entered_in_error(conn, old_id: str) -> dict | None:
+    """Spec 4.3: mark a medication request wrong is a supersede. A new
+    version is copied from the current one with exactly one value changed —
+    `status` becomes 'entered-in-error' — and the old row is pointed at it,
+    the same way supersede_medication_request does.
+
+    Every other value is kept exactly. The dict is built the way
+    create_medication_request reads it: the date column as ISO text (or
+    None), timing_when as a list, dose_value and period as they came from
+    the database (Decimal — create_decimal passes them through str()).
+    Returns None if there is no such row; raises SupersedeConflict if the
+    old row was already superseded; raises AlreadyEnteredInError if it
+    already carries the entered-in-error value. Never commits. Returns the
+    new typed row.
+    """
+    old = get_medication_request(conn, old_id)
+    if old is None:
+        return None
+    if old["superseded_by"] is not None:
+        raise SupersedeConflict(
+            "this version has already been superseded"
+        )
+    if old["status"] == "entered-in-error":
+        raise AlreadyEnteredInError(
+            "this record is already marked entered-in-error"
+        )
+    d = {
+        "medication_text": old["medication_text"],
+        "medication_code_system": old["medication_code_system"],
+        "medication_code": old["medication_code"],
+        "status": "entered-in-error",
+        "authored_on": old["authored_on"].isoformat() if old["authored_on"] else None,
+        "sig_text": old["sig_text"],
+        "dose_value": old["dose_value"],
+        "dose_unit": old["dose_unit"],
+        "dose_unit_code": old["dose_unit_code"],
+        "route_text": old["route_text"],
+        "frequency": old["frequency"],
+        "period": old["period"],
+        "period_unit": old["period_unit"],
+        "timing_when": list(old["timing_when"]) if old["timing_when"] else None,
+        "note": old["note"],
+    }
+    return supersede_medication_request(conn, old_id, old["subject_id"], d)
 
 
 # ---------------------------------------------------------------------------

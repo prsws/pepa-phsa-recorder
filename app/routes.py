@@ -9,10 +9,14 @@
                                  add a condition
     GET,POST                     /conditions/<id>/supersede
                                  supersede a condition (new version)
+    POST                         /conditions/<id>/mark-error
+                                 mark a condition entered-in-error (4.3)
     GET,POST                     /subjects/<id>/medications/new
                                  add a medication request
     GET,POST                     /medications/<id>/supersede
                                    supersede a medication request (new version)
+    POST                         /medications/<id>/mark-error
+                                  mark a medication request entered-in-error (4.3)
 
 Page rules (spec 6.1): CRS button labels only, the fixed test-data banner
 (every page, in base.html), HTTP 422 with the form re-rendered on
@@ -775,6 +779,86 @@ def medication_supersede_page(id: str):
         return Response(str(e), status=409, mimetype="text/plain")
     except Exception as e:
         log.error("database error in medication supersede: %s: %s",
+                  type(e).__name__, e)
+        return _error_page("something went wrong; nothing was saved")
+    finally:
+        _finish(conn, commit=ok)
+    return redirect(url_for("main.subject_page", id=med["subject_id"]))
+
+
+@bp.post("/conditions/<id>/mark-error")
+def condition_mark_error(id: str):
+    """POST /conditions/<id>/mark-error (spec 4.3, 6): mark a condition as
+    entered-in-error. That is a supersede, not a fourth verb: a new version
+    copied from the current one with verification_status set to
+    'entered-in-error', then the old row pointed at it. No form fields are
+    read.
+
+    A condition that does not exist is a 404; one already superseded
+    (SupersedeConflict) is HTTP 409 with a plain message; one already marked
+    entered-in-error (AlreadyEnteredInError) is HTTP 409 with a plain
+    message; an unexpected database error is a plain 500 page. On success:
+    redirect to the subject page.
+    """
+    if not _origin_ok():
+        return Response("forbidden: Origin does not match", status=403)
+
+    conn = _request_conn()
+    ok = False
+    try:
+        cond = queries.get_condition(conn, id)
+        if cond is None:
+            abort(404, description="no such condition")
+        queries.mark_condition_entered_in_error(conn, cond["id"])
+        ok = True
+    except HTTPException:
+        raise  # the caller (Flask's 404 handler) answers
+    except queries.SupersedeConflict as e:
+        return Response(str(e), status=409, mimetype="text/plain")
+    except queries.AlreadyEnteredInError as e:
+        return Response(str(e), status=409, mimetype="text/plain")
+    except Exception as e:
+        log.error("database error marking condition entered-in-error: %s: %s",
+                  type(e).__name__, e)
+        return _error_page("something went wrong; nothing was saved")
+    finally:
+        _finish(conn, commit=ok)
+    return redirect(url_for("main.subject_page", id=cond["subject_id"]))
+
+
+@bp.post("/medications/<id>/mark-error")
+def medication_mark_error(id: str):
+    """POST /medications/<id>/mark-error (spec 4.3, 6): mark a medication
+    request as entered-in-error. That is a supersede, not a fourth verb: a
+    new version copied from the current one with status set to
+    'entered-in-error', then the old row pointed at it. No form fields are
+    read.
+
+    A medication request that does not exist is a 404; one already
+    superseded (SupersedeConflict) is HTTP 409 with a plain message; one
+    already marked entered-in-error (AlreadyEnteredInError) is HTTP 409 with
+    a plain message; an unexpected database error is a plain 500 page. On
+    success: redirect to the subject page.
+    """
+    if not _origin_ok():
+        return Response("forbidden: Origin does not match", status=403)
+
+    conn = _request_conn()
+    ok = False
+    try:
+        med = queries.get_medication_request(conn, id)
+        if med is None:
+            abort(404, description="no such medication request")
+        queries.mark_medication_request_entered_in_error(conn, med["id"])
+        ok = True
+    except HTTPException:
+        raise  # the caller (Flask's 404 handler) answers
+    except queries.SupersedeConflict as e:
+        return Response(str(e), status=409, mimetype="text/plain")
+    except queries.AlreadyEnteredInError as e:
+        return Response(str(e), status=409, mimetype="text/plain")
+    except Exception as e:
+        log.error("database error marking medication request entered-in-error: %s: %s",
                   type(e).__name__, e)
         return _error_page("something went wrong; nothing was saved")
     finally:

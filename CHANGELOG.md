@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## M4c (2026-10-05) — mark a condition or medication request entered-in-error
+
+Mark a record entered-in-error: two data-layer functions in `app/queries.py`
+(`mark_condition_entered_in_error`, `mark_medication_request_entered_in_error`)
+that reuse the existing supersede functions — a new version is copied from the
+current one with the status changed to `entered-in-error`; conflicts
+(already superseded, already marked) raise with the fixed spec-0 messages.
+Two POST routes in `app/routes.py`, a button on the subject page
+(`templates/subject.html`), and 17 tests (`tests/test_mark_error.py`).
+
 ## M4b (2026-10-05) — supersede a medication request
 
 The second step of M4. Supersede a medication request: data layer
