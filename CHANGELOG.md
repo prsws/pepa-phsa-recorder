@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## M4d (2026-10-05) — hide entered-in-error rows on the subject page
+
+The subject page splits each list into entered-in-error and other rows in
+`app/routes.py` (`subject_page`): hidden by default, shown with
+`?show_entered_in_error=1`, with the "show entered-in-error (n)" /
+"hide entered-in-error" links in `templates/subject.html`. Home page counts
+(`list_subjects`) now exclude entered-in-error rows. Nine tests in
+`tests/test_hidden_entered_in_error.py` (the ninth, the home-page count test,
+reads on the test's own connection: a second connection cannot see rows the
+test has not committed).
+
 ## M4c (2026-10-05) — mark a condition or medication request entered-in-error
 
 Mark a record entered-in-error: two data-layer functions in `app/queries.py`

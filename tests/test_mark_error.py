@@ -656,7 +656,9 @@ def test_subject_page_shows_and_hides_mark_error_button(client_tx, tx_conn):
         headers=ORIGIN)
     assert r.status_code == 302, f"expected 302, got {r.status_code}"
 
-    r = client_tx.get(SUBJECT_URL.format(sid=sid))
+    # the marked record is hidden from the default page (M4d), so look at it
+    # with entered-in-error rows shown
+    r = client_tx.get(SUBJECT_URL.format(sid=sid) + "?show_entered_in_error=1")
     assert r.status_code == 200, f"expected 200, got {r.status_code}"
     body = r.text
     assert "Mark entered-in-error" not in body

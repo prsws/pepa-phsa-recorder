@@ -93,9 +93,11 @@ def list_subjects(conn) -> list[dict]:
         """
         SELECT s.id, s.label, s.fixture_id, s.created_at,
                (SELECT count(*) FROM phsa.current_condition c
-                 WHERE c.subject_id = s.id) AS condition_count,
+                 WHERE c.subject_id = s.id
+                    AND c.verification_status IS DISTINCT FROM 'entered-in-error') AS condition_count,
                (SELECT count(*) FROM phsa.current_medication_request m
-                 WHERE m.subject_id = s.id) AS medication_count
+                 WHERE m.subject_id = s.id
+                    AND m.status <> 'entered-in-error') AS medication_count
         FROM phsa.subject s
         ORDER BY s.created_at
         """

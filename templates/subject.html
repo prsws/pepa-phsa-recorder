@@ -58,6 +58,13 @@
   <p>None.</p>
   <p><a class="button" href="/subjects/{{ subject.id }}/conditions/new">Add a condition</a></p>
   {% endif %}
+  {% if condition_eie_count > 0 %}
+  {% if show %}
+  <p><a href="/subjects/{{ subject.id }}">hide entered-in-error</a></p>
+  {% else %}
+  <p><a href="/subjects/{{ subject.id }}?show_entered_in_error=1">show entered-in-error ({{ condition_eie_count }})</a></p>
+  {% endif %}
+  {% endif %}
 
   <h2>Current medication requests</h2>
   {% if medications %}
@@ -85,6 +92,13 @@
   {% else %}
   <p>None.</p>
   <p><a class="button" href="/subjects/{{ subject.id }}/medications/new">Add a medication request</a></p>
+  {% endif %}
+  {% if medication_eie_count > 0 %}
+  {% if show %}
+  <p><a href="/subjects/{{ subject.id }}">hide entered-in-error</a></p>
+  {% else %}
+  <p><a href="/subjects/{{ subject.id }}?show_entered_in_error=1">show entered-in-error ({{ medication_eie_count }})</a></p>
+  {% endif %}
   {% endif %}
 
   <p><a href="/">back to subjects</a></p>

@@ -201,6 +201,19 @@ def subject_page(id: str):
         demo = queries.get_current_demographics(conn, id)
         conditions = queries.list_current_conditions(conn, id)
         medications = queries.list_current_medication_requests(conn, id)
+        # entered-in-error rows are hidden by default (spec 6: lists hide
+        # entered-in-error rows and offer a link to show them). The queries
+        # above return every current row; the split happens here.
+        show = request.args.get("show_entered_in_error") == "1"
+        eie_conditions = [c for c in conditions
+                          if c["verification_status"] == "entered-in-error"]
+        shown_conditions = conditions if show else [
+            c for c in conditions
+            if c["verification_status"] != "entered-in-error"]
+        eie_medications = [m for m in medications
+                           if m["status"] == "entered-in-error"]
+        shown_medications = medications if show else [
+            m for m in medications if m["status"] != "entered-in-error"]
     except HTTPException:
         raise  # the caller (Flask's 404 handler) answers
     except Exception as e:
@@ -209,7 +222,11 @@ def subject_page(id: str):
     finally:
         _finish(conn, commit=False)  # reads only; never commit here
     return render_template("subject.html", subject=subject, demo=demo,
-                           conditions=conditions, medications=medications)
+                           conditions=shown_conditions,
+                           medications=shown_medications,
+                           condition_eie_count=len(eie_conditions),
+                           medication_eie_count=len(eie_medications),
+                           show=show)
 
 
 def _demo_form_from_row(row: dict | None) -> dict:

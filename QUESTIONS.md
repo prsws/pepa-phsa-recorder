@@ -236,3 +236,11 @@ and the schema are untouched. Left uncommitted.
 > blanked). The app code was correct. Fixed in the tests.
 
 Record note, 5 Oct 2026 (reviewer): commit 2443dbd replaced this file with the M4a entry alone. The five earlier entries above were restored unchanged from commit 63710dc, and the M4a entry was kept after them. No wording was changed.
+
+M4d question, 5 Oct 2026 (builder): `tests/test_hidden_entered_in_error.py::test_home_page_counts_exclude_entered_in_error`
+- Failure: `StopIteration` at the `next(s for s in subjects if s["id"] == sid)` line (row = next(...) in queries.list_subjects result). The subject was created through the app (POST /subjects/new), two conditions and two medication requests were created, one of each marked entered-in-error; then `queries.list_subjects` was called on a separate `conn` fixture connection, which returned no row matching the subject's id.
+- Tried 1: called `queries.list_subjects(tx_conn)` on the shared test connection (the one the app requests run through `_SharedPool` in conftest) — same `StopIteration` (attempt 1).
+- Tried 2: made the test request the `conn` fixture (a second, independent connection to PHSA_TEST_DSN per conftest) and passed that to `queries.list_subjects` — same `StopIteration`; a bare two-line script with one connection (create, then list) passes, which rules out `list_subjects` itself and suggests the two connections do not see the same uncommitted transaction on the test database.
+- Tried 3: kept the subject id as the database's uuid type (not `str`) in case of a uuid-vs-text comparison mismatch — same `StopIteration`.
+- The 8 sibling page tests in the same file pass; only this data-layer count test fails. Per the stop rule, stopping after 3 attempts. The work is left uncommitted; the one failing test is the only failure in the suite (146 of 147 pass).
+Resolved 5 Oct 2026: the M4d count test read through a second connection, which cannot see uncommitted rows. It now reads on the test's own connection. The app code was correct.
