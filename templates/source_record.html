@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Source record · PHSA Recorder{% endblock %}
+{% block content %}
+{% set sha_hex = record.content_sha256.hex() if record.content_sha256 is not none else "" %}
+<article>
+  <h1>Source record</h1>
+  <table class="striped">
+    <tbody>
+      <tr><th>Resource type</th><td>{{ record.source_resource_type }}</td></tr>
+      <tr><th>Source system</th><td>{{ record.source_system }}</td></tr>
+      <tr><th>Ingested</th><td>{{ record.ingested_at.strftime("%Y-%m-%d %H:%M") if record.ingested_at else "—" }}</td></tr>
+      <tr><th>Effective class</th><td><span class="eff-tag">{{ record.effective_class }}</span></td></tr>
+      <tr><th>Test data</th><td>{{ "yes" if record.is_test_data else "no" }}</td></tr>
+      <tr><th>Content hash</th><td><code>{{ sha_hex }}</code></td></tr>
+    </tbody>
+  </table>
+  <h2>Resource (as stored)</h2>
+  <pre>{{ raw_text }}</pre>
+  <p><a href="/">back to subjects</a></p>
+</article>
+{% endblock %}

@@ -597,12 +597,112 @@ def mark_medication_request_entered_in_error(conn, old_id: str) -> dict | None:
 def get_source_record(conn, source_record_id: str) -> dict | None:
     return conn.execute(
         """
-        SELECT id, source_system, source_resource_type, source_resource_id,
-               resource_raw, content_sha256, extraction_method,
-               epistemic_class, is_test_data, ingested_at
-        FROM phsa.source_record WHERE id = %(id)s
+        SELECT s.id, s.source_system, s.source_resource_type,
+               s.source_resource_id, s.resource_raw, s.content_sha256,
+               s.extraction_method, s.epistemic_class, s.is_test_data,
+               s.ingested_at, e.effective_class
+        FROM phsa.source_record s
+        JOIN phsa.source_record_effective e
+          ON e.source_record_id = s.id
+        WHERE s.id = %(id)s
         """,
         {"id": source_record_id},
     ).fetchone()
+
+
+def list_subject_history(conn, subject_id: str) -> list[dict]:
+    """Every version of every typed row for one subject (demographics,
+    conditions, medication requests), oldest first — INCLUDING superseded
+    and entered-in-error versions (spec 6: the history page shows
+    everything).
+
+    Three SELECTs (one per typed table), each joined to source_record
+    (for ingested_at) and source_record_effective (for effective_class);
+    the results are merged in Python and sorted by (ingested_at, id).
+    Each dict carries exactly: kind, id, source_record_id, ingested_at,
+    effective_class, summary, status, superseded_by.
+    """
+    rows: list[dict] = []
+
+    demo_rows = conn.execute(
+        """
+        SELECT d.id, d.source_record_id, s.ingested_at,
+               e.effective_class, d.usual_name, d.given_name, d.family_name,
+               d.superseded_by
+        FROM phsa.subject_demographics d
+        JOIN phsa.source_record s ON s.id = d.source_record_id
+        JOIN phsa.source_record_effective e ON e.source_record_id = s.id
+        WHERE d.subject_id = %(subject_id)s
+        """,
+        {"subject_id": subject_id},
+    ).fetchall()
+    for r in demo_rows:
+        summary = r["usual_name"] or " ".join(
+            n for n in (r["given_name"], r["family_name"]) if n
+        ) or None
+        rows.append({
+            "kind": "demographics",
+            "id": r["id"],
+            "source_record_id": r["source_record_id"],
+            "ingested_at": r["ingested_at"],
+            "effective_class": r["effective_class"],
+            "summary": summary,
+            "status": "",
+            "superseded_by": r["superseded_by"],
+        })
+
+    cond_rows = conn.execute(
+        """
+        SELECT c.id, c.source_record_id, s.ingested_at,
+               e.effective_class, c.code_text, c.clinical_status,
+               c.verification_status, c.superseded_by
+        FROM phsa.condition c
+        JOIN phsa.source_record s ON s.id = c.source_record_id
+        JOIN phsa.source_record_effective e ON e.source_record_id = s.id
+        WHERE c.subject_id = %(subject_id)s
+        """,
+        {"subject_id": subject_id},
+    ).fetchall()
+    for r in cond_rows:
+        status = r["clinical_status"]
+        if r["verification_status"]:
+            status = status + " / " + r["verification_status"]
+        rows.append({
+            "kind": "condition",
+            "id": r["id"],
+            "source_record_id": r["source_record_id"],
+            "ingested_at": r["ingested_at"],
+            "effective_class": r["effective_class"],
+            "summary": r["code_text"],
+            "status": status,
+            "superseded_by": r["superseded_by"],
+        })
+
+    med_rows = conn.execute(
+        """
+        SELECT m.id, m.source_record_id, s.ingested_at,
+               e.effective_class, m.medication_text, m.status,
+               m.superseded_by
+        FROM phsa.medication_request m
+        JOIN phsa.source_record s ON s.id = m.source_record_id
+        JOIN phsa.source_record_effective e ON e.source_record_id = s.id
+        WHERE m.subject_id = %(subject_id)s
+        """,
+        {"subject_id": subject_id},
+    ).fetchall()
+    for r in med_rows:
+        rows.append({
+            "kind": "medication request",
+            "id": r["id"],
+            "source_record_id": r["source_record_id"],
+            "ingested_at": r["ingested_at"],
+            "effective_class": r["effective_class"],
+            "summary": r["medication_text"],
+            "status": r["status"],
+            "superseded_by": r["superseded_by"],
+        })
+
+    rows.sort(key=lambda row: (row["ingested_at"], row["id"]))
+    return rows
 
 

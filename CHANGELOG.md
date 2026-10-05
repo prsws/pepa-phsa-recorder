@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## M4e (2026-10-05) — history page and source-record page
+
+Two read-only pages in `app/routes.py`: the subject's history
+(`/subjects/<id>/history`, every version of every typed row, oldest first,
+including superseded and entered-in-error) and the source-record page
+(`/source-records/<id>`, with its effective class and content hash as hex).
+A History link on the subject page (`templates/subject.html`).
+`list_subject_history` in `app/queries.py`. 11 tests in
+`tests/test_history_and_source.py`.
+
 ## M4d (2026-10-05) — hide entered-in-error rows on the subject page
 
 The subject page splits each list into entered-in-error and other rows in

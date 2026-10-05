@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ subject.label }} · history · PHSA Recorder{% endblock %}
+{% block content %}
+{% set by_id = {} %}
+{% for h in history %}
+{% set _x = by_id.setdefault(h.id, h) %}
+{% endfor %}
+<article>
+  <h1>{{ subject.label }} — history</h1>
+  <p>Every version of every record for this subject, oldest first.</p>
+  <table class="striped">
+    <thead>
+      <tr>
+        <th>When</th><th>Kind</th><th>Summary</th><th>Status</th>
+        <th>Effective class</th><th>State</th><th>Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for h in history %}
+      <tr>
+        <td>{{ h.ingested_at.strftime("%Y-%m-%d %H:%M") if h.ingested_at else "—" }}</td>
+        <td>{{ h.kind }}</td>
+        <td>{{ h.summary or "—" }}</td>
+        <td>{{ h.status or "—" }}</td>
+        <td><span class="eff-tag">{{ h.effective_class }}</span></td>
+        <td>
+          {% if h.superseded_by is none %}
+          current
+          {% else %}
+          {% set newer = by_id.get(h.superseded_by) %}
+          superseded by
+          {% if newer %}
+          <a href="/source-records/{{ newer.source_record_id }}">{{ newer.id }}</a>
+          {% else %}
+          {{ h.superseded_by }}
+          {% endif %}
+          {% endif %}
+        </td>
+        <td><a href="/source-records/{{ h.source_record_id }}">source record</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p><a href="/subjects/{{ subject.id }}">back to {{ subject.label }}</a></p>
+</article>
+{% endblock %}

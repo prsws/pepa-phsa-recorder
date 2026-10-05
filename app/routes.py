@@ -28,6 +28,7 @@ Update and no Delete; to change a demographics entry the app inserts a new
 version and points the old row at it.
 """
 
+import json
 import logging
 
 import psycopg
@@ -227,6 +228,54 @@ def subject_page(id: str):
                            condition_eie_count=len(eie_conditions),
                            medication_eie_count=len(eie_medications),
                            show=show)
+
+
+@bp.get("/subjects/<id>/history")
+def subject_history(id: str):
+    """GET /subjects/<id>/history: every version of every typed row for this
+    subject, oldest first — including superseded and entered-in-error
+    versions (read-only; spec 6)."""
+    conn = _request_conn()
+    try:
+        subject = queries.get_subject(conn, id)
+        if subject is None:
+            abort(404, description="no such subject")
+        history = queries.list_subject_history(conn, id)
+    except HTTPException:
+        raise  # the caller (Flask's 404 handler) answers
+    except Exception as e:
+        log.error("database error in subject history: %s: %s", type(e).__name__, e)
+        return _error_page("something went wrong")
+    finally:
+        _finish(conn, commit=False)  # reads only; never commit here
+    return render_template("history.html", subject=subject, history=history)
+
+
+@bp.get("/source-records/<id>")
+def source_record_page(id: str):
+    """GET /source-records/<id>: read-only view of one archived source
+    record — type, source system, when ingested, effective class,
+    test-data flag, the content hash as hex, and the raw resource
+    (read-only; spec 6)."""
+    conn = _request_conn()
+    try:
+        record = queries.get_source_record(conn, id)
+        if record is None:
+            abort(404, description="no such source record")
+    except HTTPException:
+        raise  # the caller (Flask's 404 handler) answers
+    except Exception as e:
+        log.error("database error in source record view: %s: %s",
+                  type(e).__name__, e)
+        return _error_page("something went wrong")
+    finally:
+        _finish(conn, commit=False)  # reads only; never commit here
+    raw = record["resource_raw"]
+    if isinstance(raw, str):
+        raw = json.loads(raw)
+    return render_template(
+        "source_record.html", record=record,
+        raw_text=json.dumps(raw, indent=2, ensure_ascii=False))
 
 
 def _demo_form_from_row(row: dict | None) -> dict:
