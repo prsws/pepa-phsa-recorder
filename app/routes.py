@@ -23,6 +23,7 @@ version and points the old row at it.
 import logging
 
 import psycopg
+from werkzeug.exceptions import HTTPException
 from flask import (
     Blueprint,
     Response,
@@ -190,9 +191,9 @@ def subject_page(id: str):
         demo = queries.get_current_demographics(conn, id)
         conditions = queries.list_current_conditions(conn, id)
         medications = queries.list_current_medication_requests(conn, id)
+    except HTTPException:
+        raise  # the caller (Flask's 404 handler) answers
     except Exception as e:
-        if e.code == 404:
-            raise  # the caller (Flask's 404 handler) answers
         log.error("database error in subject overview: %s: %s", type(e).__name__, e)
         return _error_page("something went wrong")
     finally:
@@ -239,9 +240,9 @@ def demographics_page(id: str):
             if subject is None:
                 abort(404, description="no such subject")
             demo = queries.get_current_demographics(conn, id)
+        except HTTPException:
+            raise  # the caller (Flask's 404 handler) answers
         except Exception as e:
-            if e.code == 404:
-                raise  # the caller (Flask's 404 handler) answers
             log.error("database error in demographics form: %s: %s", type(e).__name__, e)
             return _error_page("something went wrong")
         finally:
@@ -264,9 +265,9 @@ def demographics_page(id: str):
             if subject is None:
                 abort(404, description="no such subject")
             current = queries.get_current_demographics(conn, id)
+        except HTTPException:
+            raise  # the caller (Flask's 404 handler) answers
         except Exception as e:
-            if e.code == 404:
-                raise  # the caller (Flask's 404 handler) answers
             log.error("database error in demographics form: %s: %s", type(e).__name__, e)
             return _error_page("something went wrong")
         finally:
@@ -332,9 +333,9 @@ def condition_new_page(id: str):
             subject = queries.get_subject(conn, id)
             if subject is None:
                 abort(404, description="no such subject")
+        except HTTPException:
+            raise  # the caller (Flask's 404 handler) answers
         except Exception as e:
-            if e.code == 404:
-                raise  # the caller (Flask's 404 handler) answers
             log.error("database error in condition form: %s: %s", type(e).__name__, e)
             return _error_page("something went wrong")
         finally:
@@ -357,9 +358,9 @@ def condition_new_page(id: str):
             subject = queries.get_subject(conn, id)
             if subject is None:
                 abort(404, description="no such subject")
+        except HTTPException:
+            raise  # the caller (Flask's 404 handler) answers
         except Exception as e:
-            if e.code == 404:
-                raise  # the caller (Flask's 404 handler) answers
             log.error("database error in condition form: %s: %s", type(e).__name__, e)
             return _error_page("something went wrong")
         finally:
@@ -384,9 +385,9 @@ def condition_new_page(id: str):
         if subject is None:
             abort(404, description="no such subject")
         queries.create_condition(conn, id, fields)
+    except HTTPException:
+        raise  # the caller (Flask's 404 handler) answers
     except Exception as e:
-        if e.code == 404:
-            raise  # the caller (Flask's 404 handler) answers
         log.error("database error creating condition: %s: %s", type(e).__name__, e)
         return _error_page("something went wrong; nothing was saved")
     _finish(conn, commit=True)
@@ -432,9 +433,9 @@ def medication_request_new_page(id: str):
             subject = queries.get_subject(conn, id)
             if subject is None:
                 abort(404, description="no such subject")
+        except HTTPException:
+            raise  # the caller (Flask's 404 handler) answers
         except Exception as e:
-            if e.code == 404:
-                raise  # the caller (Flask's 404 handler) answers
             log.error("database error in medication request form: %s: %s",
                       type(e).__name__, e)
             return _error_page("something went wrong")
@@ -459,9 +460,9 @@ def medication_request_new_page(id: str):
             subject = queries.get_subject(conn, id)
             if subject is None:
                 abort(404, description="no such subject")
+        except HTTPException:
+            raise  # the caller (Flask's 404 handler) answers
         except Exception as e:
-            if e.code == 404:
-                raise  # the caller (Flask's 404 handler) answers
             log.error("database error in medication request form: %s: %s",
                       type(e).__name__, e)
             return _error_page("something went wrong")
@@ -491,9 +492,9 @@ def medication_request_new_page(id: str):
         if subject is None:
             abort(404, description="no such subject")
         queries.create_medication_request(conn, id, fields)
+    except HTTPException:
+        raise  # the caller (Flask's 404 handler) answers
     except Exception as e:
-        if e.code == 404:
-            raise  # the caller (Flask's 404 handler) answers
         log.error("database error creating medication request: %s: %s",
                   type(e).__name__, e)
         return _error_page("something went wrong; nothing was saved")

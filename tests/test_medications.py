@@ -107,7 +107,8 @@ def test_create_medication_request_writes_one_source_record_and_one_typed_row(co
     assert raw["id"] == str(typed["id"])
     assert raw["meta"]["security"] == [fhir.HTEST_TAG]
     assert raw["status"] == "active"
-    assert "intent" not in raw  # not on the form; left to the schema default
+    assert raw["intent"] == "order"  # spec 5.3 lists intent among the document's keys
+    assert raw["intent"] == typed["intent"]  # the document and the row must agree
     assert raw["medicationCodeableConcept"] == {"text": "Metformin 500 mg"}
     assert raw["subject"] == {"reference": f"Patient/{subject_id}"}
     assert "authoredOn" not in raw  # blank means absent

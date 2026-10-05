@@ -139,3 +139,9 @@ Question 1 decided by José, 4 Oct 2026: onset is text or date, never both
 
 Question 2 decided by José, 5 Oct 2026: 'entered-in-error' stays as a
 choice when creating a record. No change. Closed.
+
+## 2026-10-05 (Pre-M4): a valid demographics POST for a missing subject answers 500, not 404
+
+Found during Pre-M4, 5 Oct 2026: a valid demographics POST for a subject id
+that does not exist answers 500, not 404, because that path does not look the
+subject up first. Not fixed in Pre-M4. For José to decide.

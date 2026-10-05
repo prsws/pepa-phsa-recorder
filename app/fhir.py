@@ -127,8 +127,10 @@ def medication_request_json(resource_id: str, subject_id: str, d) -> str:
     `d` is the validated field dict from validation (None / "" / [] mean
     blank). Blank inputs stay blank: no key is written for them.
 
-    `intent` is not on the form and is left to the schema default ('order'),
-    so it is never written here (blank means blank, spec rule 2).
+    `intent` is not on the form (the user does not choose it) but the document
+    must still carry it (spec 5.3 lists it among the resource's keys), so it
+    is always written as "order" — the same value the schema default gives the
+    typed row, keeping the document and the row in agreement.
 
     The single `dosageInstruction` entry carries only what was entered; it is
     omitted from the resource entirely when nothing in it was entered.
@@ -175,6 +177,7 @@ def medication_request_json(resource_id: str, subject_id: str, d) -> str:
 
     return build_resource("MedicationRequest", resource_id, {
         "status": d["status"],
+        "intent": "order",
         "medicationCodeableConcept": medication,
         "subject": {"reference": f"Patient/{subject_id}"},
         "authoredOn": d["authored_on"],
