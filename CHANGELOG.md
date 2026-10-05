@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## M4f (2026-10-05) — source check for the banned words; M4 complete
+
+New `tests/test_crs_words.py` (9 tests): `edit`, `updat*`, `delet*`,
+`truncat*` must not appear in `app/*.py` names, strings, `templates/*.html`
+(text, no exceptions), or route rules/endpoints; comments, docstrings and the
+one `SET superseded_by =` statement are permitted (exactly 3, only in
+`queries.py`). One line in `app/fhir.py`: `ordered.update(...)` becomes
+in-place `ordered |= {...}`. M4 is now complete.
+
 ## M4e (2026-10-05) — history page and source-record page
 
 Two read-only pages in `app/routes.py`: the subject's history

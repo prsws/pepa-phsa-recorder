@@ -45,7 +45,7 @@ def build_resource(resource_type: str, resource_id: str, fields: dict) -> str:
             continue
         doc[key] = value
     ordered = {k: doc[k] for k in _CANONICAL_KEYS if k in doc}
-    ordered.update({k: v for k, v in doc.items() if k not in ordered})
+    ordered |= {k: v for k, v in doc.items() if k not in ordered}
     return json.dumps(ordered, ensure_ascii=False)
 
 
