@@ -249,14 +249,18 @@ def test_supersede_demographics_data_layer(tx_conn):
     })
     assert third is not None
     assert third["id"] != first["id"]
-    # now first is already superseded: a further supersede of it must fail
+    # now first is already superseded: a further supersede of it must fail.
+    # The attempt runs in a savepoint: it inserts a new row (which is
+    # undone by the savepoint rollback), and the pointer UPDATE then
+    # matches 0 rows, so SupersedeConflict is raised and the whole
+    # attempt is discarded, leaving the test's transaction intact.
     with pytest.raises(queries.SupersedeConflict):
-        queries.supersede_demographics(tx_conn, first["id"], subject_id, {
-            "family_name": "Four", "given_name": None, "usual_name": None,
-            "sex": None, "home_municipality": None, "preferred_language": None,
-            "birth_year": None, "birth_date": None,
-        })
-    tx_conn.rollback()  # discard the failed attempt (uncommitted in the test tx)
+        with tx_conn.transaction():
+            queries.supersede_demographics(tx_conn, first["id"], subject_id, {
+                "family_name": "Four", "given_name": None, "usual_name": None,
+                "sex": None, "home_municipality": None, "preferred_language": None,
+                "birth_year": None, "birth_date": None,
+            })
     still = tx_conn.execute(
         "SELECT superseded_by FROM phsa.subject_demographics WHERE id = %s",
         (first["id"],),

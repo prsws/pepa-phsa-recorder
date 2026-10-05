@@ -77,30 +77,25 @@ helpers live under `tests/`, never under `app/`.
   nothing (row counts before/after), agreeing year+date accepted,
   404s, index lists.
 
-### Verification and one remaining failure (see QUESTIONS.md)
+### Verification (see QUESTIONS.md for the one test bug found and fixed)
 
-The commit-leak fix holds: two full `.venv/bin/python -m pytest -v`
-runs, same result, 0 skipped; the no-leak test passes in both and the
-database is empty afterwards.
+Two full `.venv/bin/python -m pytest -v` runs, same result, 0 skipped:
+**31 passed** — with the no-leak test
+(`tests/test_zz_no_leak.py`, last) passing in both, so the test
+database ends empty. Nothing was written to the real database.
 
-One test still fails, deterministically, in both runs:
-`tests/test_demographics.py::test_supersede_demographics_data_layer`
-— the pre-existing (interrupted-pass) data-layer 409 test. As written
-it cannot produce its intended scenario inside one transaction:
-superseding a row that already has a second current version in the
-same open transaction hits the `source_record_id` unique constraint
-before the pointer UPDATE, so it raises `UniqueViolation` instead of
-`SupersedeConflict`; the pointer UPDATE matching 0 rows (the 409
-branch) needs the old row superseded before the transaction began. The
-app's 409 branch itself is exercised and passes via the HTTP
-supersede tests. Full diagnosis and the deferral to M4 are in
-`QUESTIONS.md` (2026-10-04 M1 entry); no `app/` file was changed to
-"fix" it.
+During this pass, `test_supersede_demographics_data_layer` failed
+deterministically in the first two runs. Diagnosis (full text in
+`QUESTIONS.md`, 2026-10-04 M1 entry): a test bug, not an app bug —
+its `tx_conn.rollback()` (commented "discard the failed attempt")
+rolled back the ENTIRE test transaction, so the rows created earlier
+in the same test were undone and the final lookup saw nothing. Fixed
+in `tests/test_demographics.py` only (owner-directed): the refused
+call is wrapped in `with tx_conn.transaction():` (a savepoint that
+discards exactly that attempt) and the `tx_conn.rollback()` line
+deleted. Both verification runs after the fix: 31 passed, 0 skipped.
 
-Result of both verification runs (identical): **30 passed, 0 skipped,
-1 failed** (`test_supersede_demographics_data_layer`, pre-existing
-test-vs-data-layer mismatch, documented above). Nothing was written to
-the real database; the test database ends empty. M2 not started.
+M2 not started.
 
 ## Pre-M1 (2026-10-04) — skip/fail semantics and /healthz robustness
 

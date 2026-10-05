@@ -75,48 +75,37 @@ change: the healthz test should `pytest.fail` on the endpoint assertion when
 
 **DECLINED by José, 4 Oct 2026. No change. Closed.**
 
-## 2026-10-04 (M1): `test_supersede_demographics_data_layer` fails after the commit-leak fix
+## 2026-10-04 (M1): `test_supersede_demographics_data_layer` failed after the commit-leak fix — TEST BUG, NOW FIXED
 
 Seen on 4 Oct 2026, in the first full verification run after the
 commit-no-op fix in `tests/conftest.py` (`_SavepointProxy` + `ROLLBACK TO
-SAVEPOINT req`). Both verification runs (the two mandatory full runs)
-give the same result: 30 passed, 0 skipped, 1 failed — the no-leak test
-(`tests/test_zz_no_leak.py`, last) passes in both runs, so the test
-database is left empty; only the one test below fails.
+SAVEPOINT req`): the test failed with `TypeError: 'NoneType' object is
+not subscriptable` at its final assertion.
 
-The failing test is `tests/test_demographics.py::test_supersede_demographics_data_layer`
-(step 5 of the interrupted M1 pass): `TypeError: 'NoneType' object is
-not subscriptable` at the final assertion.
+**Diagnosis (this was a test bug, not an app or data-layer bug):** the
+test's line `tx_conn.rollback()` — commented "discard the failed
+attempt" — did NOT discard only the attempt. A plain `rollback()` on a
+psycopg 3 connection rolls back the ENTIRE transaction (psycopg 3
+rolls back all the way, including to and beyond savepoints; the
+"discard the savepoint" form is `ROLLBACK TO SAVEPOINT` or
+`SAVEPOINT ... RELEASE`). So the `first`/`second`/`third` rows created
+earlier in the same test were all undone, the `first` row no longer
+existed, and the final lookup returned `None`. The test's own comment
+shows the intent: discard only the failed supersede attempt.
 
-What the test does: creates a subject and two demographics rows
-(`first`, `second`); supersedes `first` with a third version — all
-uncommitted in the test transaction, no problem; then, still in the same
-open transaction, tries to supersede `first` AGAIN. In PostgreSQL this
-is a *unique-constraint violation* on
-`phsa.subject_demographics.source_record_id` (the `superseded_by`
-pointer is a plain FK and allows duplicates, so that part passes):
-`supersede_demographics` raises `psycopg.errors.UniqueViolation` when
-inserting the new row — its `source_record_id` already belongs to
-`second` in the same open transaction — before the pointer UPDATE is
-ever reached. The test's docstring states the intended scenario — "the
-old row was already superseded; the request becomes HTTP 409" — i.e.
-the pointer UPDATE matching 0 rows, which requires the old row to have
-been superseded *before* the new transaction began.
+**Fix (owner-directed, in `tests/test_demographics.py` only; no `app/`
+file changed):** the refused call is now wrapped in a savepoint —
+`with tx_conn.transaction(): queries.supersede_demographics(...)` —
+and the `tx_conn.rollback()` line was deleted. The `transaction()`
+context manager rolls back only that attempt (and re-arms the
+savepoint), exactly what the comment always intended; the rows created
+before it remain, the `SupersedeConflict` still propagates (a
+savepoint rollback does not swallow the exception), and the final
+assertion now sees the unchanged pointer.
 
-The test's comment "409 branch" and the fixture's own
-`tx_conn.rollback()` before the final read show the test was *meant* to
-cover the 409 branch, but as written it cannot produce it inside one
-transaction. The interrupted session apparently stopped right here: the
-data layer was never changed, because the data layer is not in the
-wrong place — the test is.
-
-The app's 409 branch is exercised and passes in this pass (the HTTP
-supersede tests drive it through a prior request that already
-superseded the old row — the `SupersedeConflict` path). I did not
-change any `app/` file to fix the failing test; the data layer's
-contract names only the 409, and making it swallow a
-`UniqueViolation` for a scenario its own docs do not name is not a
-change I will make on my own judgment. The test stays failing; the
-M4 milestone (spec section 9: "superseding a row that was already
-superseded returns 409 and writes nothing") is where a proper
-data-layer 409 test belongs.
+**Verification:** after the fix, two full `.venv/bin/python -m pytest -v`
+runs give the same result — **31 passed, 0 skipped** — with the no-leak
+test (`tests/test_zz_no_leak.py`, last) passing in both, so the test
+database ends empty. Not deferred; M4's HTTP-level 409 test remains
+the spec-section-9 item for the route, and this data-layer test now
+covers it.
