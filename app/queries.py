@@ -14,6 +14,7 @@ it is never taken from the form.
 """
 
 from datetime import date
+from decimal import Decimal
 
 from . import fhir
 
@@ -306,6 +307,90 @@ def create_condition(conn, subject_id: str, d: dict) -> dict:
             "verification_status": d.get("verification_status"),
             "onset_text": d.get("onset_text"),
             "onset_date": date.fromisoformat(d["onset_date"]) if d.get("onset_date") else None,
+            "note": d.get("note"),
+        },
+    ).fetchone()
+    return row
+
+
+# ---------------------------------------------------------------------------
+# medication_request (typed row; one source record + one typed row per
+# medication request, spec 4.1). Supersede for medication requests is M4.
+# ---------------------------------------------------------------------------
+
+def list_current_medication_requests(conn, subject_id: str) -> list[dict]:
+    """The subject's current (non-superseded) medication requests, read from
+    the phsa.current_medication_request view (spec: all "current" screens
+    read these views). Includes the view's effective_class."""
+    return conn.execute(
+        """
+        SELECT m.id, m.medication_text, m.medication_code_system,
+               m.medication_code, m.status, m.intent, m.authored_on,
+               m.sig_text, m.dose_value, m.dose_unit, m.dose_unit_code,
+               m.route_text, m.frequency, m.period, m.period_unit,
+               m.timing_when, m.note,
+               m.source_record_id, e.effective_class
+        FROM phsa.current_medication_request m
+        JOIN phsa.source_record_effective e ON e.source_record_id = m.source_record_id
+        WHERE m.subject_id = %(subject_id)s AND m.superseded_by IS NULL
+        ORDER BY m.id
+        """,
+        {"subject_id": subject_id},
+    ).fetchall()
+
+
+def create_medication_request(conn, subject_id: str, d: dict) -> dict:
+    """Write recipe 4.1 for a medication request: new source record (a
+    MedicationRequest resource, spec 5.3) then the typed row pointing at it.
+
+    Blank fields stay NULL (blank means blank, spec rule 2). `intent` is
+    left to the schema default ('order') and `safety_critical` to its
+    default (true): neither is on the form. Never commits. Returns the new
+    typed row.
+    """
+    new_id = _new_uuid(conn)
+    raw = fhir.medication_request_json(new_id, subject_id, d)
+    source_record_id = _insert_source_record(conn, "MedicationRequest", new_id, raw)
+    row = conn.execute(
+        """
+        INSERT INTO phsa.medication_request (
+          id, subject_id, source_record_id,
+          medication_text, medication_code_system, medication_code,
+          status, authored_on, sig_text,
+          dose_value, dose_unit, dose_unit_code,
+          route_text, frequency, period, period_unit, timing_when, note
+        )
+        VALUES (%(id)s, %(subject_id)s, %(source_record_id)s,
+                %(medication_text)s, %(medication_code_system)s, %(medication_code)s,
+                %(status)s, %(authored_on)s, %(sig_text)s,
+                %(dose_value)s, %(dose_unit)s, %(dose_unit_code)s,
+                %(route_text)s, %(frequency)s, %(period)s, %(period_unit)s,
+                %(timing_when)s, %(note)s)
+        RETURNING id, subject_id, source_record_id,
+                  medication_text, medication_code_system, medication_code,
+                  status, intent, authored_on, sig_text,
+                  dose_value, dose_unit, dose_unit_code,
+                  route_text, frequency, period, period_unit, timing_when,
+                  note, safety_critical, superseded_by
+        """,
+        {
+            "id": new_id,
+            "subject_id": subject_id,
+            "source_record_id": source_record_id,
+            "medication_text": d["medication_text"],
+            "medication_code_system": d.get("medication_code_system"),
+            "medication_code": d.get("medication_code"),
+            "status": d["status"],
+            "authored_on": date.fromisoformat(d["authored_on"]) if d.get("authored_on") else None,
+            "sig_text": d.get("sig_text"),
+            "dose_value": Decimal(d["dose_value"]) if d.get("dose_value") is not None else None,
+            "dose_unit": d.get("dose_unit"),
+            "dose_unit_code": d.get("dose_unit_code"),
+            "route_text": d.get("route_text"),
+            "frequency": d.get("frequency"),
+            "period": Decimal(d["period"]) if d.get("period") is not None else None,
+            "period_unit": d.get("period_unit"),
+            "timing_when": d["timing_when"] or None,  # blank means absent
             "note": d.get("note"),
         },
     ).fetchone()

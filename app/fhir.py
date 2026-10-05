@@ -119,3 +119,65 @@ def condition_json(resource_id: str, subject_id: str, d) -> str:
         "onsetDateTime": d["onset_date"],
         "note": [{"text": d["note"]}] if d["note"] else None,
     })
+
+
+def medication_request_json(resource_id: str, subject_id: str, d) -> str:
+    """MedicationRequest resource (spec 5.3), for phsa.medication_request.
+
+    `d` is the validated field dict from validation (None / "" / [] mean
+    blank). Blank inputs stay blank: no key is written for them.
+
+    `intent` is not on the form and is left to the schema default ('order'),
+    so it is never written here (blank means blank, spec rule 2).
+
+    The single `dosageInstruction` entry carries only what was entered; it is
+    omitted from the resource entirely when nothing in it was entered.
+    """
+    medication = {"text": d["medication_text"]}
+    if d["medication_code_system"] and d["medication_code"]:  # coding only when BOTH
+        medication["coding"] = [
+            {"system": d["medication_code_system"], "code": d["medication_code"]}
+        ]
+
+    timing = None
+    repeat = {}
+    if d.get("frequency") is not None:
+        repeat["frequency"] = d["frequency"]
+    if d.get("period") is not None:
+        repeat["period"] = d["period"]
+    if d["period_unit"]:
+        repeat["periodUnit"] = d["period_unit"]
+    if d["timing_when"]:
+        repeat["when"] = list(d["timing_when"])
+    if repeat:
+        timing = {"repeat": repeat}
+
+    dose_and_rate = None
+    if d["dose_value"] is not None and d["dose_unit"]:
+        dose_quantity = {
+            "value": d["dose_value"],
+            "unit": d["dose_unit"],
+        }
+        if d["dose_unit_code"]:  # system+code only when a UCUM code was entered
+            dose_quantity["system"] = "http://unitsofmeasure.org"
+            dose_quantity["code"] = d["dose_unit_code"]
+        dose_and_rate = [{"doseQuantity": dose_quantity}]
+
+    instruction = {}
+    if d["sig_text"]:
+        instruction["text"] = d["sig_text"]
+    if d["route_text"]:
+        instruction["route"] = {"text": d["route_text"]}
+    if timing is not None:
+        instruction["timing"] = timing
+    if dose_and_rate is not None:
+        instruction["doseAndRate"] = dose_and_rate
+
+    return build_resource("MedicationRequest", resource_id, {
+        "status": d["status"],
+        "medicationCodeableConcept": medication,
+        "subject": {"reference": f"Patient/{subject_id}"},
+        "authoredOn": d["authored_on"],
+        "dosageInstruction": [instruction] if instruction else None,
+        "note": [{"text": d["note"]}] if d["note"] else None,
+    })

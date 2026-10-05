@@ -7,6 +7,8 @@
                                  create demographics (if none) or supersede them
     GET,POST                     /subjects/<id>/conditions/new
                                  add a condition (supersede is M4)
+    GET,POST                     /subjects/<id>/medications/new
+                                 add a medication request (supersede is M4)
 
 Page rules (spec 6.1): CRS button labels only, the fixed test-data banner
 (every page, in base.html), HTTP 422 with the form re-rendered on
@@ -187,8 +189,7 @@ def subject_page(id: str):
             abort(404, description="no such subject")
         demo = queries.get_current_demographics(conn, id)
         conditions = queries.list_current_conditions(conn, id)
-        # M3: medication requests arrive there.
-        medications = []
+        medications = queries.list_current_medication_requests(conn, id)
     except Exception as e:
         if e.code == 404:
             raise  # the caller (Flask's 404 handler) answers
@@ -387,6 +388,114 @@ def condition_new_page(id: str):
         if e.code == 404:
             raise  # the caller (Flask's 404 handler) answers
         log.error("database error creating condition: %s: %s", type(e).__name__, e)
+        return _error_page("something went wrong; nothing was saved")
+    _finish(conn, commit=True)
+    return redirect(url_for("main.subject_page", id=id))
+
+
+def _med_form_from_form(form) -> dict:
+    """The medication request form's re-render values, exactly as posted
+    (blank stays blank). Used to keep the user's input on a 422."""
+    return {
+        "medication_text": form.get("medication_text") or "",
+        "medication_code_system": form.get("medication_code_system") or "",
+        "medication_code": form.get("medication_code") or "",
+        "status": form.get("status") or "",
+        "authored_on": form.get("authored_on") or "",
+        "sig_text": form.get("sig_text") or "",
+        "dose_value": form.get("dose_value") or "",
+        "dose_unit": form.get("dose_unit") or "",
+        "dose_unit_code": form.get("dose_unit_code") or "",
+        "route_text": form.get("route_text") or "",
+        "frequency": form.get("frequency") or "",
+        "period": form.get("period") or "",
+        "period_unit": form.get("period_unit") or "",
+        "timing_when": [v for v in form.getlist("timing_when") if v],
+        "note": form.get("note") or "",
+    }
+
+
+@bp.route("/subjects/<id>/medications/new", methods=["GET", "POST"])
+def medication_request_new_page(id: str):
+    """GET,POST /subjects/<id>/medications/new (spec 6): add a medication
+    request. Supersede (new version) and mark entered-in-error are M4.
+
+    POST rules (spec 6.1): Origin check; validation failure re-renders the
+    form with the user's input kept and returns HTTP 422, no database
+    write; an unexpected database error yields a plain 500 page. `intent`
+    and `safety_critical` are not on the form; they are left to the schema
+    defaults.
+    """
+    if request.method == "GET":
+        conn = _request_conn()
+        try:
+            subject = queries.get_subject(conn, id)
+            if subject is None:
+                abort(404, description="no such subject")
+        except Exception as e:
+            if e.code == 404:
+                raise  # the caller (Flask's 404 handler) answers
+            log.error("database error in medication request form: %s: %s",
+                      type(e).__name__, e)
+            return _error_page("something went wrong")
+        finally:
+            _finish(conn, commit=False)  # reads only; never commit here
+        return render_template(
+            "medication_request_new.html", subject=subject, form={},
+            errors=[], field_errors={},
+            status_options=validation.MED_STATUS_OPTIONS,
+            period_unit_options=validation.PERIOD_UNIT_OPTIONS,
+            timing_when_options=validation.TIMING_WHEN_OPTIONS,
+        )
+
+    if not _origin_ok():
+        return Response("forbidden: Origin does not match", status=403)
+
+    form = request.form
+    fields, errors = validation.validate_medication_request(form)
+    if errors:
+        conn = _request_conn()
+        try:
+            subject = queries.get_subject(conn, id)
+            if subject is None:
+                abort(404, description="no such subject")
+        except Exception as e:
+            if e.code == 404:
+                raise  # the caller (Flask's 404 handler) answers
+            log.error("database error in medication request form: %s: %s",
+                      type(e).__name__, e)
+            return _error_page("something went wrong")
+        finally:
+            _finish(conn, commit=False)
+        # re-render with the user's input kept, HTTP 422, no database write
+        field_errors = {}
+        for e in errors:
+            for key in ("medication_text", "medication_code_system",
+                         "medication_code", "status", "authored_on",
+                         "dose_value", "dose_unit", "frequency", "period",
+                         "period_unit"):
+                if key in e and key not in field_errors:
+                    field_errors[key] = e
+        return render_template(
+            "medication_request_new.html", subject=subject,
+            form=_med_form_from_form(form),
+            errors=errors, field_errors=field_errors,
+            status_options=validation.MED_STATUS_OPTIONS,
+            period_unit_options=validation.PERIOD_UNIT_OPTIONS,
+            timing_when_options=validation.TIMING_WHEN_OPTIONS,
+        ), 422
+
+    conn = _request_conn()
+    try:
+        subject = queries.get_subject(conn, id)
+        if subject is None:
+            abort(404, description="no such subject")
+        queries.create_medication_request(conn, id, fields)
+    except Exception as e:
+        if e.code == 404:
+            raise  # the caller (Flask's 404 handler) answers
+        log.error("database error creating medication request: %s: %s",
+                  type(e).__name__, e)
         return _error_page("something went wrong; nothing was saved")
     _finish(conn, commit=True)
     return redirect(url_for("main.subject_page", id=id))

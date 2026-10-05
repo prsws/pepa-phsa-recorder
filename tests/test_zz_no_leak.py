@@ -31,7 +31,7 @@ def test_no_rows_left_behind():
     conn = open_connection(config.test_dsn)  # raises -> the test fails, no skip
     try:
         for table in ("source_record", "subject", "subject_demographics",
-                      "condition"):
+                      "condition", "medication_request"):
             n = conn.execute(
                 f"SELECT count(*) AS n FROM phsa.{table}"
             ).fetchone()["n"]

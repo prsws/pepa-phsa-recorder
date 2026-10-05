@@ -136,3 +136,6 @@ schema change involved.
 
 Question 1 decided by José, 4 Oct 2026: onset is text or date, never both
 (spec v0.5). Fixed in Pre-M3.
+
+Question 2 decided by José, 5 Oct 2026: 'entered-in-error' stays as a
+choice when creating a record. No change. Closed.

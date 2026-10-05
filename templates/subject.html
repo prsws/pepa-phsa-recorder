@@ -61,8 +61,10 @@
       {% endfor %}
     </tbody>
   </table>
+  <p><a class="button" href="/subjects/{{ subject.id }}/medications/new">Add a medication request</a></p>
   {% else %}
   <p>None.</p>
+  <p><a class="button" href="/subjects/{{ subject.id }}/medications/new">Add a medication request</a></p>
   {% endif %}
 
   <p><a href="/">back to subjects</a></p>

@@ -1,5 +1,78 @@
 # CHANGELOG
 
+## M3 (2026-10-05) — medication requests: create and view (spec section 10)
+
+Milestone M3: `GET,POST /subjects/<id>/medications/new` (spec section 6) and
+the subject overview listing the subject's current medication requests from
+`phsa.current_medication_request`, with an add link. Supersede and
+mark-entered-in-error for medication requests are M4 and are not built.
+(Continued an interrupted pass; the app-side half was already on disk.)
+
+- `app/fhir.py`: `medication_request_json` (spec 5.3): `status`,
+  `medicationCodeableConcept` = `{"text": ...}` plus `coding` only if both
+  `medication_code_system` and `medication_code` were entered, `subject` =
+  `Patient/<subject_id>`, `authoredOn` only if entered, `note` only if
+  entered, and one `dosageInstruction` entry carrying only what was entered
+  (`text` = sig_text, `route` = `{"text": ...}`, `timing.repeat` =
+  `{frequency, period, periodUnit, when:[...]}` with only the keys entered,
+  `doseAndRate` with `doseQuantity` = `{value, unit}` plus
+  `system`/`code` only when a UCUM code was entered). `dosageInstruction` is
+  omitted entirely when nothing in it was entered. `intent` is not on the
+  form and is left to the schema default ('order'), so it is never written.
+  Blank means absent, never `null`/`""` (spec rule 2); the HTEST tag comes
+  from the shared `build_resource` (5.0).
+- `app/validation.py`: `validate_medication_request` — `medication_text` and
+  `status` required; `medication_code_system` and `medication_code` both
+  given or both blank (the schema's `med_code_pair` CHECK); `dose_value` and
+  `dose_unit` both given or both blank (the schema's `dose_pair` CHECK);
+  `frequency` a positive integer in smallint range; `period` a positive
+  number; `status` and `period_unit` as selects matching the schema CHECK
+  lists exactly (`MED_STATUS_OPTIONS` includes `entered-in-error`, kept per
+  the owner's 5 Oct 2026 decision; `PERIOD_UNIT_OPTIONS` = s/min/h/d/wk/mo/a);
+  `timing_when` a multi-select from `TIMING_WHEN_OPTIONS`, one constant in
+  code (the spec 6.1 FHIR event-timing list).
+- `app/queries.py`: `list_current_medication_requests` (from the
+  `phsa.current_medication_request` view) and `create_medication_request`
+  (write recipe 4.1: uuidv7, source record with `MedicationRequest` type,
+  typed row; `intent` left to its schema default and `safety_critical` to its
+  default, neither on the form; never commits; `is_test_data` a constant
+  true). The 4.2 recipe is not added here; that is M4.
+- `app/routes.py`: `GET,POST /subjects/<id>/medications/new` — Origin check
+  on POST, 422 with the input kept on validation failure and no database
+  write, 500 page on unexpected database errors, 302 to the subject page on
+  success; the subject overview now lists current medication requests with an
+  add link.
+- `templates/medication_request_new.html` (new): the form per spec 6.1 —
+  `<label>` wrapping the inputs, `<small>` field errors with
+  `aria-invalid="true"`, the fixed test-data banner (inherited), button
+  labelled **Create**.
+- `templates/subject.html`: the medication-requests block now carries the
+  **Add a medication request** link.
+- `tests/test_medications.py` (new): the medication items of the spec-section-9
+  M2/M3 list — create writes one source record + one typed row with matching
+  ids (`intent` = 'order', `safety_critical` = true from the schema defaults);
+  every blank optional field is NULL in the row and absent from `resource_raw`;
+  `dosageInstruction` omitted when nothing in it was entered; code-pair and
+  dose-pair violations (system only / code only; value only / unit only) give
+  422 and write nothing; required `medication_text` / `status` give 422 and
+  write nothing; a status outside the CHECK list 422s; bad `frequency` /
+  `period` 422; `resource_raw.id` equals `source_resource_id`;
+  `resource_raw.meta.security` contains HTEST; `content_sha256` equals
+  `sha256(convert_to(resource_raw::text,'UTF8'))` recomputed in a test query;
+  the overview page lists current medication requests and the add link; the
+  new-page GET renders; a 404 for an unknown subject.
+- `tests/test_zz_no_leak.py`: the no-leak check now also asserts
+  `phsa.medication_request` holds 0 rows (still last, still passes).
+
+Two full `.venv/bin/python -m pytest -v` runs, same result, 0 skipped:
+**64 passed** (47 pre-M3 + 17 new) — with the no-leak test passing in both,
+so the test database ends empty. Nothing was written to the real database.
+No new QUESTIONS.md entries were needed this pass (the M2 entry's Question 2
+— `entered-in-error` stays a choice when creating a record — was already
+decided and recorded).
+
+M4 not started.
+
 ## Pre-M3 (2026-10-04) — onset is text or date, never both (spec v0.5)
 
 The owner decided the question raised in `QUESTIONS.md` after M2 (the

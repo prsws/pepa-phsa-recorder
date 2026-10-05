@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Add a medication request · {{ subject.label }} · PHSA Recorder{% endblock %}
+{% block content %}
+<article>
+  <h1>Add a medication request — {{ subject.label }}</h1>
+  {% if errors %}
+  <article class="negative">
+    {% for e in errors %}<p>{{ e }}</p>{% endfor %}
+  </article>
+  {% endif %}
+
+  <h2>Create</h2>
+  <form method="post" action="/subjects/{{ subject.id }}/medications/new">
+    <label>
+      Medication <small>(the medication as the source wrote it; required)</small>
+      <input type="text" name="medication_text" value="{{ form.medication_text or '' }}"
+             {% if 'medication_text' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'medication_text' in field_errors %}<small aria-invalid="true">{{ field_errors['medication_text'] }}</small>{% endif %}
+    </label>
+    <label>
+      Code system <small>(both of code system and code, or neither)</small>
+      <input type="text" name="medication_code_system" value="{{ form.medication_code_system or '' }}"
+             {% if 'medication_code_system' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'medication_code_system' in field_errors %}<small aria-invalid="true">{{ field_errors['medication_code_system'] }}</small>{% endif %}
+    </label>
+    <label>
+      Code
+      <input type="text" name="medication_code" value="{{ form.medication_code or '' }}"
+             {% if 'medication_code' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'medication_code' in field_errors %}<small aria-invalid="true">{{ field_errors['medication_code'] }}</small>{% endif %}
+    </label>
+    <label>
+      Status <small>(required)</small>
+      <select name="status"
+              {% if 'status' in field_errors %}aria-invalid="true"{% endif %}>
+        <option value="" {% if not form.status %}selected{% endif %}>—</option>
+        {% for s in status_options %}
+        <option value="{{ s }}" {% if form.status == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+      {% if 'status' in field_errors %}<small aria-invalid="true">{{ field_errors['status'] }}</small>{% endif %}
+    </label>
+    <label>
+      Authored on <small>(when the prescription was written; blank if unknown; ISO date YYYY-MM-DD)</small>
+      <input type="date" name="authored_on" value="{{ form.authored_on or '' }}"
+             {% if 'authored_on' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'authored_on' in field_errors %}<small aria-invalid="true">{{ field_errors['authored_on'] }}</small>{% endif %}
+    </label>
+    <label>
+      Sig text <small>(the instruction as written)</small>
+      <textarea name="sig_text" rows="3">{{ form.sig_text or '' }}</textarea>
+    </label>
+    <label>
+      Dose value <small>(both of dose value and dose unit, or neither)</small>
+      <input type="text" name="dose_value" value="{{ form.dose_value or '' }}"
+             {% if 'dose_value' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'dose_value' in field_errors %}<small aria-invalid="true">{{ field_errors['dose_value'] }}</small>{% endif %}
+    </label>
+    <label>
+      Dose unit <small>(e.g. mg, units)</small>
+      <input type="text" name="dose_unit" value="{{ form.dose_unit or '' }}"
+             {% if 'dose_unit' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'dose_unit' in field_errors %}<small aria-invalid="true">{{ field_errors['dose_unit'] }}</small>{% endif %}
+    </label>
+    <label>
+      Dose unit code <small>(a UCUM code, e.g. mg)</small>
+      <input type="text" name="dose_unit_code" value="{{ form.dose_unit_code or '' }}">
+    </label>
+    <label>
+      Route
+      <input type="text" name="route_text" value="{{ form.route_text or '' }}">
+    </label>
+    <label>
+      Frequency <small>(times per period; a whole number)</small>
+      <input type="text" name="frequency" value="{{ form.frequency or '' }}"
+             {% if 'frequency' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'frequency' in field_errors %}<small aria-invalid="true">{{ field_errors['frequency'] }}</small>{% endif %}
+    </label>
+    <label>
+      Period <small>(the period the frequency repeats over; a number)</small>
+      <input type="text" name="period" value="{{ form.period or '' }}"
+             {% if 'period' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'period' in field_errors %}<small aria-invalid="true">{{ field_errors['period'] }}</small>{% endif %}
+    </label>
+    <label>
+      Period unit
+      <select name="period_unit"
+              {% if 'period_unit' in field_errors %}aria-invalid="true"{% endif %}>
+        <option value="" {% if not form.period_unit %}selected{% endif %}>—</option>
+        {% for s in period_unit_options %}
+        <option value="{{ s }}" {% if form.period_unit == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+      {% if 'period_unit' in field_errors %}<small aria-invalid="true">{{ field_errors['period_unit'] }}</small>{% endif %}
+    </label>
+    <label>
+      Timing <small>(when, e.g. morning or with meals; choose any that apply)</small>
+      <select name="timing_when" multiple size="6">
+        {% for s in timing_when_options %}
+        <option value="{{ s }}" {% if s in form.timing_when %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Note
+      <textarea name="note" rows="3">{{ form.note or '' }}</textarea>
+    </label>
+    <p>
+      <button class="secondary" type="submit">Create</button>
+      <a href="/subjects/{{ subject.id }}">cancel</a>
+    </p>
+  </form>
+</article>
+{% endblock %}
