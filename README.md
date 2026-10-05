@@ -76,6 +76,33 @@ The only person this app loads in v1 is the synthetic fixture SUBJ-01
 tag inside `resource_raw`. Every page carries the banner:
 **TEST DATA ONLY. Synthetic fixtures. Not a medical record.**
 
+## Seed (SUBJ-01, synthetic fixture)
+
+`seed/subj01.json` holds the values of spec section 8. `scripts/seed_subj01.py`
+loads them through the app's own validation and data-layer functions. Run it
+from the repository root.
+
+Dry run (the default; safe to repeat). It loads into the TEST database in one
+transaction, prints the counts, and rolls back. Nothing is kept:
+
+    .venv/bin/python -m scripts.seed_subj01
+
+Real load. **Only the owner runs this.** It writes to the database behind
+`PHSA_DSN` and keeps what it writes; the app cannot remove it afterwards:
+
+    .venv/bin/python -m scripts.seed_subj01 --commit --target phsa
+
+- Both flags are required; one alone is refused.
+- It refuses if `PHSA_DSN` does not name the database `phsa`, or if it is the
+  same as `PHSA_TEST_DSN`.
+- It prints the host, port and database name (never the password), then asks
+  two questions: "Is this the database you intend to write to?" and "Has a
+  fresh backup of the database VM been taken since the last schema change?".
+  It goes on only if each answer is exactly `yes`.
+- If a subject with fixture id `SUBJ-01` is already there, it changes nothing
+  and says "already seeded".
+- On any failure it rolls back and writes nothing.
+
 ## Layout
 
 - `app/` — Flask app: `config.py`, `db.py`, `routes.py`, `queries.py`, `fhir.py`, `validation.py`, `templates/`

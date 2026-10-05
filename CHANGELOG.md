@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## M5b (2026-10-05) — seed script: the real-load path (`--commit --target phsa`)
+
+Written by the reviewer at José's direction, not by the builder.
+
+`scripts/seed_subj01.py` gains the real-load path of spec section 8. With no
+flags it is the same dry run as M5a. With `--commit --target phsa` it prints
+the host, port and database name, asks the two questions of the spec, and
+writes only if each answer is exactly `yes`. One flag alone is refused. It
+also refuses when `PHSA_DSN` does not name the database `phsa` or equals
+`PHSA_TEST_DSN` (two checks the spec does not ask for). "Already seeded"
+changes nothing. Any failure rolls back and prints the error type only, never
+a password or a connection string. `main()` takes `ask=input` so tests can
+stand in for the keyboard.
+30 tests in `tests/test_seed_subj01_commit.py`; none opens a database
+connection (the connection and the loader are stand-ins). One of them runs
+the M4f word check over `scripts/` as well. README: new section "Seed".
+The real load has NOT been run. Only the owner runs it.
+
 ## M5a (2026-10-05) — seed loader for the synthetic fixture person SUBJ-01
 
 `seed/subj01.json`: the fixture values, all strings.
