@@ -133,3 +133,6 @@ schema change involved.
    clinical judgement the app adds. If the owner wants create to forbid
    `entered-in-error` until M4 lands, that is a validator change (drop it
    from the create form's options) — a form rule, not a data-model change.
+
+Question 1 decided by José, 4 Oct 2026: onset is text or date, never both
+(spec v0.5). Fixed in Pre-M3.

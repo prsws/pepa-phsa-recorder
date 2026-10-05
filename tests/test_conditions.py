@@ -5,6 +5,9 @@ M2/M3 list; supersede and mark-error are M4 and are not tested here).
 - every blank optional field is NULL in the row and absent from resource_raw
 - code_system / code pair violations give 422 and write nothing
 - required code_text / clinical_status give 422 and write nothing
+- both onset_text and onset_date give 422 and write nothing (spec v0.5:
+  onset is text or date, never both); the data layer refuses both by
+  raising ValueError before any SQL runs
 - resource_raw.id equals source_resource_id
 - resource_raw.meta.security contains HTEST
 - content_sha256 equals sha256(convert_to(resource_raw::text, 'UTF8'))
@@ -19,6 +22,8 @@ rolled back at the end; no test commits, no test may leave a row behind.
 
 import json
 import uuid
+
+import pytest
 
 from app import fhir, queries
 
@@ -337,6 +342,78 @@ def test_condition_bad_onset_date_gives_422_and_writes_nothing(app, tx_conn):
         (subject_id,),
     ).fetchone()["n"]
     assert n == 0  # nothing was written
+
+
+def test_condition_both_onset_values_give_422_and_writes_nothing(app, tx_conn):
+    """Spec v0.5: onset is text OR date, never both. Posting both is a 422
+    with the input kept, and nothing is written (row counts before and
+    after). The schema has no CHECK between the two columns, so this is a
+    form-level rule."""
+    subject_id = queries.create_subject(tx_conn, "Both onset person", None)
+    client_tx = app.test_client()
+    before_cond = tx_conn.execute(
+        "SELECT count(*) AS n FROM phsa.condition WHERE subject_id = %s",
+        (subject_id,),
+    ).fetchone()["n"]
+    before_src = tx_conn.execute(
+        "SELECT count(*) AS n FROM phsa.source_record WHERE source_system = 'phsa-crs-manual'"
+    ).fetchone()["n"]
+    r = client_tx.post(
+        f"/subjects/{subject_id}/conditions/new",
+        data={"code_text": "Hypertension", "code_system": "", "code": "",
+               "clinical_status": "active", "verification_status": "",
+               "onset_text": "controlled, since spring", "onset_date": "2010-05-01",
+               "note": ""},
+        headers={"Origin": "http://localhost"},
+    )
+    assert r.status_code == 422
+    body = r.text
+    assert "one or the other" in body  # the error is shown under the onset fields
+    assert 'value="controlled, since spring"' in body  # the input is kept
+    assert 'value="2010-05-01"' in body
+    assert "TEST DATA ONLY. Synthetic fixtures. Not a medical record." in body
+    after_cond = tx_conn.execute(
+        "SELECT count(*) AS n FROM phsa.condition WHERE subject_id = %s",
+        (subject_id,),
+    ).fetchone()["n"]
+    after_src = tx_conn.execute(
+        "SELECT count(*) AS n FROM phsa.source_record WHERE source_system = 'phsa-crs-manual'"
+    ).fetchone()["n"]
+    assert after_cond == before_cond  # nothing was written
+    assert after_src == before_src
+
+
+def test_create_condition_data_layer_refuses_both_onset_values(conn):
+    """The data layer refuses both onset values by raising ValueError before
+    any SQL runs, so no caller can bypass the form rule (spec v0.5)."""
+    subject_id = queries.create_subject(conn, "Data layer both onset person", None)
+    before_cond = conn.execute(
+        "SELECT count(*) AS n FROM phsa.condition WHERE subject_id = %s",
+        (subject_id,),
+    ).fetchone()["n"]
+    before_src = conn.execute(
+        "SELECT count(*) AS n FROM phsa.source_record WHERE source_system = 'phsa-crs-manual'"
+    ).fetchone()["n"]
+    with pytest.raises(ValueError, match="never both"):
+        queries.create_condition(conn, subject_id, {
+            "code_text": "Hypertension",
+            "code_system": None,
+            "code": None,
+            "clinical_status": "active",
+            "verification_status": None,
+            "onset_text": "controlled, since spring",
+            "onset_date": "2010-05-01",
+            "note": None,
+        })
+    after_cond = conn.execute(
+        "SELECT count(*) AS n FROM phsa.condition WHERE subject_id = %s",
+        (subject_id,),
+    ).fetchone()["n"]
+    after_src = conn.execute(
+        "SELECT count(*) AS n FROM phsa.source_record WHERE source_system = 'phsa-crs-manual'"
+    ).fetchone()["n"]
+    assert after_cond == before_cond  # the ValueError raised before any SQL ran
+    assert after_src == before_src
 
 
 def test_condition_invalid_status_from_form_gives_422(app, tx_conn):

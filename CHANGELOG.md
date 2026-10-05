@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## Pre-M3 (2026-10-04) — onset is text or date, never both (spec v0.5)
+
+The owner decided the question raised in `QUESTIONS.md` after M2 (the
+`onsetString`/`onsetDateTime` mapping): a condition's onset is given as text
+OR as a date, never both (spec v0.5, sections 5.2, 6.1 and 9). No data-model
+change: both columns stay. Not milestone work; M3 not started.
+
+- `app/validation.py`: `validate_condition` now errors when `onset_text` and
+  `onset_date` are both given; the input is kept, the form re-renders with
+  HTTP 422 and an error under the onset fields, and nothing is written (same
+  pattern as the `code_system`/`code` pair rule).
+- `app/queries.py`: `create_condition` also refuses both onset values,
+  raising `ValueError` before any SQL runs, so no caller can bypass the form.
+- `templates/condition_new.html`: one line of help text by the onset fields
+  ("Fill in one or the other of the two onset fields, not both.").
+- `tests/test_conditions.py`: posting both onset values gives 422 and writes
+  nothing (row counts before and after); the data layer raises `ValueError`.
+  No existing test passed both onset values (they passed one or neither);
+  none changed.
+
 ## M2 (2026-10-04) — conditions: create and view (spec section 10)
 
 Milestone M2: `GET,POST /subjects/<id>/conditions/new` (spec section 6) and

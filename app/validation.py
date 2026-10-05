@@ -7,6 +7,7 @@ nothing is written.
 Rules (spec 6.1):
 - label is required (subjects)
 - birth_year and birth_date, if both given, must agree (schema CHECK)
+- onset_text and onset_date: never both given (conditions; spec v0.5)
 - enums come from <select> lists matching the schema CHECK lists exactly
 - dose_value/dose_unit both given or both blank; code_system/code both
   given or both blank (M2/M3)
@@ -99,6 +100,8 @@ def validate_condition(form) -> tuple[dict, list[str]]:
         errors.append("verification_status is not a recognised status")
 
     date_raw = _text(form.get("onset_date"))
+    date_given = date_raw is not None
+    onset_text_given = d["onset_text"] is not None
     if date_raw is not None:
         try:
             # datetime.date.fromisoformat accepts YYYY-MM-DD.
@@ -107,6 +110,12 @@ def validate_condition(form) -> tuple[dict, list[str]]:
         except ValueError:
             d["onset_date"] = None
             errors.append("onset_date must be an ISO date (YYYY-MM-DD), or left blank")
+
+    # onset_text and onset_date: never both given (spec 6.1, v0.5; the schema
+    # has no CHECK between the two columns, so this is a form rule only).
+    # The user's input is kept so the form re-renders unchanged.
+    if date_given and onset_text_given:
+        errors.append("onset_date and onset_text: give one or the other, not both")
 
     return d, errors
 

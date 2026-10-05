@@ -61,6 +61,7 @@
              {% if 'onset_date' in field_errors %}aria-invalid="true"{% endif %}>
       {% if 'onset_date' in field_errors %}<small aria-invalid="true">{{ field_errors['onset_date'] }}</small>{% endif %}
     </label>
+    <p><small>Fill in one or the other of the two onset fields, not both.</small></p>
     <label>
       Note
       <textarea name="note" rows="3">{{ form.note or '' }}</textarea>

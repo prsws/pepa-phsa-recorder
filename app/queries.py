@@ -264,7 +264,17 @@ def create_condition(conn, subject_id: str, d: dict) -> dict:
 
     Blank fields stay NULL (blank means blank, spec rule 2). Never commits.
     Returns the new typed row.
+
+    Raises ValueError if both onset values are present: a condition's onset
+    is given as text OR as a date, never both (spec 6.1, v0.5). The schema
+    has no CHECK between the two columns, so the guard lives here — before
+    any SQL runs — to make no caller able to bypass the form rule.
     """
+    if d.get("onset_text") and d.get("onset_date"):
+        raise ValueError(
+            "onset is given as text OR as a date, never both "
+            "(spec 6.1: onset_text and onset_date are never both given)"
+        )
     new_id = _new_uuid(conn)
     raw = fhir.condition_json(new_id, subject_id, d)
     source_record_id = _insert_source_record(conn, "Condition", new_id, raw)
