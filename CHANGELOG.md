@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## Pre-M4-fix (2026-10-05) — two small fixes in `app/routes.py` (not milestone work; M4 not started)
+
+1. **A valid demographics POST for a missing subject answers 404, not 500.**
+   The demographics route's valid-form path now looks the subject up with
+   `queries.get_subject` first (as the condition and medication routes
+   already did on their valid-form path) and answers 404
+   ("no such subject") before any write. Covers the Pre-M4 note in
+   QUESTIONS.md.
+2. **The four write blocks finish the connection on every way out.**
+   `subject_new`, the demographics POST-write, the condition POST-write and
+   the medication POST-write blocks each now call `_finish` exactly once,
+   in a `finally:` with `commit=True` only when the write succeeded and
+   `commit=False` on every other way out (the 404, the 409 supersede
+   conflict, the duplicate-subject 409, the plain 500 error page); the
+   older in-line `_finish` calls in those blocks are removed so no path
+   calls it twice. Log lines and user-facing messages are unchanged;
+   `_finish` and `_request_conn` themselves are unchanged.
+   New tests in `tests/test_error_pages.py`: a valid demographics POST for
+   a random subject id answers 404 with row counts unchanged; a valid
+   demographics POST for a real subject whose `create_demographics` is
+   patched to raise `psycopg.OperationalError("boom")` before any SQL
+   answers the plain 500 page (no "boom"/"psycopg"/"Traceback") with no
+   demographics row written; and, with the pool's `get`/`put` wrapped in
+   counters, the number of `put` calls equals the number of `get` calls
+   for all six requests (missing-subject 404 and boom 500 on each of the
+   three write forms).
+
 ## Pre-M4 (2026-10-05) — two fixes found in review (not milestone work; M4 not started)
 
 1. **The stored MedicationRequest JSON now carries `intent`.** Spec section 5.3

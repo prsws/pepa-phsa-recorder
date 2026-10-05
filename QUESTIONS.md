@@ -145,3 +145,6 @@ choice when creating a record. No change. Closed.
 Found during Pre-M4, 5 Oct 2026: a valid demographics POST for a subject id
 that does not exist answers 500, not 404, because that path does not look the
 subject up first. Not fixed in Pre-M4. For José to decide.
+
+Decided by José, 5 Oct 2026: a missing subject is a 404 on this path too.
+Fixed in Pre-M4-fix.

@@ -163,11 +163,12 @@ def subject_new():
                                field_errors={"label": "label is required"}), 422
 
     conn = _request_conn()
+    ok = False
     try:
         subject_id = queries.create_subject(conn, fields["label"], fields["fixture_id"])
+        ok = True
     except psycopg.errors.UniqueViolation as e:
         # duplicate fixture_id: a friendly error, not a 500 (spec M1)
-        _finish(conn, commit=False)
         return render_template(
             "subject_new.html", form=form, errors=[],
             field_errors={"fixture_id": "that fixture id is already used by another subject"},
@@ -175,7 +176,8 @@ def subject_new():
     except Exception as e:
         log.error("database error creating subject: %s: %s", type(e).__name__, e)
         return _error_page("something went wrong; nothing was saved")
-    _finish(conn, commit=True)
+    finally:
+        _finish(conn, commit=ok)
     return redirect(url_for("main.subject_page", id=subject_id))
 
 
@@ -286,7 +288,11 @@ def demographics_page(id: str):
         ), 422
 
     conn = _request_conn()
+    ok = False
     try:
+        subject = queries.get_subject(conn, id)
+        if subject is None:
+            abort(404, description="no such subject")
         current = queries.get_current_demographics(conn, id)
         if current is None:
             queries.create_demographics(conn, id, fields)
@@ -294,12 +300,15 @@ def demographics_page(id: str):
             try:
                 queries.supersede_demographics(conn, current["id"], id, fields)
             except queries.SupersedeConflict as e:
-                _finish(conn, commit=False)
                 return Response(str(e), status=409, mimetype="text/plain")
+        ok = True
+    except HTTPException:
+        raise  # the caller (Flask's 404 handler) answers
     except Exception as e:
         log.error("database error in demographics write: %s: %s", type(e).__name__, e)
         return _error_page("something went wrong; nothing was saved")
-    _finish(conn, commit=True)
+    finally:
+        _finish(conn, commit=ok)
     return redirect(url_for("main.subject_page", id=id))
 
 
@@ -380,17 +389,20 @@ def condition_new_page(id: str):
         ), 422
 
     conn = _request_conn()
+    ok = False
     try:
         subject = queries.get_subject(conn, id)
         if subject is None:
             abort(404, description="no such subject")
         queries.create_condition(conn, id, fields)
+        ok = True
     except HTTPException:
         raise  # the caller (Flask's 404 handler) answers
     except Exception as e:
         log.error("database error creating condition: %s: %s", type(e).__name__, e)
         return _error_page("something went wrong; nothing was saved")
-    _finish(conn, commit=True)
+    finally:
+        _finish(conn, commit=ok)
     return redirect(url_for("main.subject_page", id=id))
 
 
@@ -487,18 +499,21 @@ def medication_request_new_page(id: str):
         ), 422
 
     conn = _request_conn()
+    ok = False
     try:
         subject = queries.get_subject(conn, id)
         if subject is None:
             abort(404, description="no such subject")
         queries.create_medication_request(conn, id, fields)
+        ok = True
     except HTTPException:
         raise  # the caller (Flask's 404 handler) answers
     except Exception as e:
         log.error("database error creating medication request: %s: %s",
                   type(e).__name__, e)
         return _error_page("something went wrong; nothing was saved")
-    _finish(conn, commit=True)
+    finally:
+        _finish(conn, commit=ok)
     return redirect(url_for("main.subject_page", id=id))
 
 
