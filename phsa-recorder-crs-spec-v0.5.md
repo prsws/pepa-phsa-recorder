@@ -1,5 +1,6 @@
-# PHSA Recorder: CRS loader app (create / read / supersede), spec v0.4
+# PHSA Recorder: CRS loader app (create / read / supersede), spec v0.5
 
+Changes in v0.5: a condition's onset is given as text OR as a date, never both (sections 5.2, 6.1 and 9). Decided by the owner on 4 Oct 2026 after milestone M2. A form-validation rule only; no data-model change, both columns stay.
 Changes in v0.4: the five seed-data assumptions in section 12 were confirmed by the owner on 4 Oct 2026, as written; the spec is no longer a draft. No data-model change and no change to the seed values.
 Changes in v0.3: no `pg_hba.conf` change is required (section 3); the seed script's `--commit` step now asks for a backup confirmation (section 8). No data-model change.
 Changes in v0.2: the app's verbs are now Create / Read / Supersede (CRS); "edit" and "delete" wording is removed everywhere (routes, labels, tests). No data-model change.
@@ -159,7 +160,7 @@ Keep these minimal. Include a key only when the value was entered; never write `
 
 ### 5.2 Condition
 
-`clinicalStatus` = `{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/condition-clinical","code":<clinical_status>}]}`; `verificationStatus` the same shape with system `.../condition-ver-status`, only if entered; `code` = `{"text": code_text}` plus `coding` only if both `code_system` and `code` entered; `subject` = `{"reference": "Patient/<subject_id>"}`; `onsetString` / `onsetDateTime` only if entered; `note` = `[{"text": ...}]` only if entered.
+`clinicalStatus` = `{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/condition-clinical","code":<clinical_status>}]}`; `verificationStatus` the same shape with system `.../condition-ver-status`, only if entered; `code` = `{"text": code_text}` plus `coding` only if both `code_system` and `code` entered; `subject` = `{"reference": "Patient/<subject_id>"}`; `onsetString` or `onsetDateTime`, only if entered and never both (FHIR onset is a choice: one form per condition; rule in 6.1); `note` = `[{"text": ...}]` only if entered.
 
 ### 5.3 MedicationRequest
 
@@ -199,6 +200,7 @@ Lists hide `entered-in-error` rows by default and show a link "show entered-in-e
   - `birth_year` and `birth_date`, if both given, must agree.
   - `dose_value` and `dose_unit` are both given or both blank.
   - `code_system` and `code` are both given or both blank (conditions and medications).
+  - `onset_text` and `onset_date` are never both given (conditions). A full date goes in `onset_date`. Wording, an approximation, or a year alone goes in `onset_text`. If a document gives both, the date is the onset and the wording goes in `note`.
   - enums come from `<select>` lists matching the schema CHECK lists exactly; an empty option means blank where the column is nullable.
   - `frequency` positive integer (smallint range); `period` positive number.
   - `timing_when` multi-select from: `MORN, NOON, AFT, EVE, NIGHT, HS, WAKE, C, CM, CD, CV, AC, ACM, ACD, ACV, PC, PCM, PCD, PCV` (one constant in code, easy to edit).
@@ -283,7 +285,7 @@ Required tests, by milestone:
 
 - **M0 (skeleton and grants):** `/healthz` is 200. Using `phsa_app` against `phsa_test`: `DELETE FROM phsa.condition` raises `insufficient_privilege`; `UPDATE phsa.condition SET code_text = 'x'` raises `insufficient_privilege`; `UPDATE phsa.condition SET superseded_by = ...` is permitted; `TRUNCATE` raises `insufficient_privilege`; `INSERT` into `phsa.record_confirmation` raises `insufficient_privilege`.
 - **M1:** create subject; label required; `is_test_data` is true in the row whatever the form posts (post a forged `is_test_data=false` and assert it is ignored); duplicate `fixture_id` shows a friendly error, not a 500; demographics create writes one `source_record` and one typed row with matching ids; `birth_year`/`birth_date` mismatch gives 422 and writes nothing.
-- **M2/M3:** create condition / medication request; every blank optional field is `NULL` in the row and absent from `resource_raw`; code-pair and dose-pair violations give 422 and write nothing; `resource_raw.id` equals `source_resource_id`; `resource_raw.meta.security` contains HTEST; `content_sha256` equals `sha256(convert_to(resource_raw::text,'UTF8'))` recomputed in a test query.
+- **M2/M3:** create condition / medication request; every blank optional field is `NULL` in the row and absent from `resource_raw`; code-pair and dose-pair violations give 422 and write nothing; a condition with both `onset_text` and `onset_date` gives 422 and writes nothing; `resource_raw.id` equals `source_resource_id`; `resource_raw.meta.security` contains HTEST; `content_sha256` equals `sha256(convert_to(resource_raw::text,'UTF8'))` recomputed in a test query.
 - **M4:** supersede creates a new source record and typed row, and the old row's `superseded_by` equals the new row's id; the old row no longer appears in `current_*` and does appear in history; superseding a row that was already superseded returns 409 and writes nothing; mark-error produces a new version with the entered-in-error status and keeps `clinical_status`; entered-in-error rows are hidden in lists by default; no code path executes `DELETE` or an `UPDATE` of any column other than `superseded_by` (grep the source in a test), and no route path, function name, variable name or template text contains the words "edit", "update" or "delete" (the one SQL statement `UPDATE phsa.<table> SET superseded_by ...` in `queries.py`, and comments explaining the rule, are the only permitted occurrences).
 - **M5:** the seed dry run on `phsa_test` produces 1 subject, 1 demographics row, 7 conditions, 7 medication requests, **15** source records, all with `is_test_data` true and `extraction_method = 'manual_entry'`, all visible in the `current_*` views with `effective_class = 'observation'`; a second run reports "already seeded" and changes nothing; the loaded values match section 8 exactly (test compares against a copy of the section 8 data kept in `seed/subj01.json`); none of the "deliberately not loaded" text appears anywhere.
 - **M6:** fragment responses for the three htmx interactions; the full-page paths still pass their M1 to M5 tests unchanged.
