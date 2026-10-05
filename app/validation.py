@@ -61,6 +61,56 @@ def validate_subject(form) -> tuple[dict, list[str]]:
     }, errors
 
 
+def validate_condition(form) -> tuple[dict, list[str]]:
+    """Condition create (spec 6.1): `code_text` and `clinical_status` are
+    required; `code_system` and `code` are both given or both blank (the
+    schema's code_pair CHECK); the selects match the schema CHECK lists
+    exactly. Blank means blank (None, never "")."""
+    errors: list[str] = []
+    d = {
+        "code_text": _text(form.get("code_text")),
+        "code_system": _text(form.get("code_system")),
+        "code": _text(form.get("code")),
+        "clinical_status": _text(form.get("clinical_status")),
+        "verification_status": _text(form.get("verification_status")),
+        "onset_text": _text(form.get("onset_text")),
+        "onset_date": None,
+        "note": _text(form.get("note")),
+    }
+
+    if not d["code_text"]:
+        errors.append("code_text is required")
+    if not d["clinical_status"]:
+        errors.append("clinical_status is required")
+
+    if d["clinical_status"] is not None and d["clinical_status"] not in CLINICAL_STATUS_OPTIONS:
+        d["clinical_status"] = None
+        errors.append("clinical_status is not a recognised status")
+
+    # code_system and code: both given or both blank (spec 6.1; the schema's
+    # code_pair CHECK would otherwise raise instead of a friendly 422).
+    if bool(d["code_system"]) != bool(d["code"]):
+        d["code_system"] = None
+        d["code"] = None
+        errors.append("code_system and code must both be given, or both be blank")
+
+    if d["verification_status"] is not None and d["verification_status"] not in VERIFICATION_STATUS_OPTIONS:
+        d["verification_status"] = None
+        errors.append("verification_status is not a recognised status")
+
+    date_raw = _text(form.get("onset_date"))
+    if date_raw is not None:
+        try:
+            # datetime.date.fromisoformat accepts YYYY-MM-DD.
+            from datetime import date
+            d["onset_date"] = date.fromisoformat(date_raw).isoformat()
+        except ValueError:
+            d["onset_date"] = None
+            errors.append("onset_date must be an ISO date (YYYY-MM-DD), or left blank")
+
+    return d, errors
+
+
 def validate_demographics(form) -> tuple[dict, list[str]]:
     """All fields optional (blank means blank); the only cross-field rule
     for demographics is birth_year / birth_date agreement (spec 6.1, the

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Add a condition · {{ subject.label }} · PHSA Recorder{% endblock %}
+{% block content %}
+<article>
+  <h1>Add a condition — {{ subject.label }}</h1>
+  {% if errors %}
+  <article class="negative">
+    {% for e in errors %}<p>{{ e }}</p>{% endfor %}
+  </article>
+  {% endif %}
+
+  <h2>Create</h2>
+  <form method="post" action="/subjects/{{ subject.id }}/conditions/new">
+    <label>
+      Wording <small>(the wording as the source wrote it; required)</small>
+      <input type="text" name="code_text" value="{{ form.code_text or '' }}"
+             {% if 'code_text' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'code_text' in field_errors %}<small aria-invalid="true">{{ field_errors['code_text'] }}</small>{% endif %}
+    </label>
+    <label>
+      Code system <small>(both of code system and code, or neither)</small>
+      <input type="text" name="code_system" value="{{ form.code_system or '' }}"
+             {% if 'code_system' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'code_system' in field_errors %}<small aria-invalid="true">{{ field_errors['code_system'] }}</small>{% endif %}
+    </label>
+    <label>
+      Code
+      <input type="text" name="code" value="{{ form.code or '' }}"
+             {% if 'code' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'code' in field_errors %}<small aria-invalid="true">{{ field_errors['code'] }}</small>{% endif %}
+    </label>
+    <label>
+      Clinical status <small>(required)</small>
+      <select name="clinical_status"
+              {% if 'clinical_status' in field_errors %}aria-invalid="true"{% endif %}>
+        <option value="" {% if not form.clinical_status %}selected{% endif %}>—</option>
+        {% for s in clinical_status_options %}
+        <option value="{{ s }}" {% if form.clinical_status == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+      {% if 'clinical_status' in field_errors %}<small aria-invalid="true">{{ field_errors['clinical_status'] }}</small>{% endif %}
+    </label>
+    <label>
+      Verification status
+      <select name="verification_status"
+              {% if 'verification_status' in field_errors %}aria-invalid="true"{% endif %}>
+        <option value="" {% if not form.verification_status %}selected{% endif %}>—</option>
+        {% for s in verification_status_options %}
+        <option value="{{ s }}" {% if form.verification_status == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+      {% if 'verification_status' in field_errors %}<small aria-invalid="true">{{ field_errors['verification_status'] }}</small>{% endif %}
+    </label>
+    <label>
+      Onset <small>(words, e.g. "approximately 14 years")</small>
+      <input type="text" name="onset_text" value="{{ form.onset_text or '' }}">
+    </label>
+    <label>
+      Onset date <small>(blank if unknown; ISO date YYYY-MM-DD)</small>
+      <input type="date" name="onset_date" value="{{ form.onset_date or '' }}"
+             {% if 'onset_date' in field_errors %}aria-invalid="true"{% endif %}>
+      {% if 'onset_date' in field_errors %}<small aria-invalid="true">{{ field_errors['onset_date'] }}</small>{% endif %}
+    </label>
+    <label>
+      Note
+      <textarea name="note" rows="3">{{ form.note or '' }}</textarea>
+    </label>
+    <p>
+      <button class="secondary" type="submit">Create</button>
+      <a href="/subjects/{{ subject.id }}">cancel</a>
+    </p>
+  </form>
+</article>
+{% endblock %}

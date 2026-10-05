@@ -80,3 +80,42 @@ def patient_json(resource_id: str, d) -> str:
         "address": address,
         "communication": communication,
     })
+
+
+def condition_json(resource_id: str, subject_id: str, d) -> str:
+    """Condition resource (spec 5.2), for phsa.condition.
+
+    `d` is the validated field dict from validation (None means blank).
+    Blank inputs stay blank: no key is written for them. The mapping of the
+    onset columns is QUESTIONS.md (2026-10-04 M2): onset_text -> onsetString,
+    onset_date -> onsetDateTime, each written only if its own value was
+    entered.
+    """
+    clinical_status = d["clinical_status"]
+    code = {"text": d["code_text"]}
+    if d["code_system"] and d["code"]:  # coding only when BOTH were entered
+        code["coding"] = [{"system": d["code_system"], "code": d["code"]}]
+
+    return build_resource("Condition", resource_id, {
+        "clinicalStatus": {
+            "coding": [{
+                "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+                "code": clinical_status,
+            }],
+        },
+        "verificationStatus": (
+            {
+                "coding": [{
+                    "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+                    "code": d["verification_status"],
+                }],
+            }
+            if d["verification_status"]
+            else None
+        ),
+        "code": code,
+        "subject": {"reference": f"Patient/{subject_id}"},
+        "onsetString": d["onset_text"],
+        "onsetDateTime": d["onset_date"],
+        "note": [{"text": d["note"]}] if d["note"] else None,
+    })

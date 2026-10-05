@@ -109,3 +109,27 @@ test (`tests/test_zz_no_leak.py`, last) passing in both, so the test
 database ends empty. Not deferred; M4's HTTP-level 409 test remains
 the spec-section-9 item for the route, and this data-layer test now
 covers it.
+
+## 2026-10-04 (M2): two small ambiguities in the spec — resolved in the direction shown, no data-model impact
+
+M2 (conditions: create, view) was built against spec v0.4. Two readings were
+not pinned down; the direction taken is recorded here, no data-model or
+schema change involved.
+
+1. **`onsetString` vs `onsetDateTime` for the condition's onset (spec 5.2
+   lists both; the schema has two columns, `onset_text` and `onset_date`).**
+   Taken: `onsetString` carries `onset_text` and `onsetDateTime` carries
+   `onset_date`, each written only if its own column was entered (they can
+   both be entered; the FHIR keys stay independent, mirroring the columns).
+   If the owner prefers onset to be one-or-the-other at the form level, the
+   form/validator is the place to add that rule (it would be a form rule,
+   not a database one — the schema has no CHECK between the two columns).
+
+2. **`verification_status` value `entered-in-error` on the CREATE form.**
+   The schema's CHECK list includes it, and the spec requires the `<select>`
+   to match the schema CHECK list exactly. The supersede/mark-error routes
+   that SET it are M4 (out of scope for M2), but a blank/`<select>` value is
+   still accepted on create; the value is a normal schema value, not a
+   clinical judgement the app adds. If the owner wants create to forbid
+   `entered-in-error` until M4 lands, that is a validator change (drop it
+   from the create form's options) — a form rule, not a data-model change.

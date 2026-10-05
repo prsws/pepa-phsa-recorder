@@ -5,6 +5,8 @@
     GET                          /subjects/<id>   subject overview
     GET,POST                     /subjects/<id>/demographics
                                  create demographics (if none) or supersede them
+    GET,POST                     /subjects/<id>/conditions/new
+                                 add a condition (supersede is M4)
 
 Page rules (spec 6.1): CRS button labels only, the fixed test-data banner
 (every page, in base.html), HTTP 422 with the form re-rendered on
@@ -184,8 +186,9 @@ def subject_page(id: str):
         if subject is None:
             abort(404, description="no such subject")
         demo = queries.get_current_demographics(conn, id)
-        # M1 scope: conditions and medication requests arrive in M2/M3.
-        conditions, medications = [], []
+        conditions = queries.list_current_conditions(conn, id)
+        # M3: medication requests arrive there.
+        medications = []
     except Exception as e:
         if e.code == 404:
             raise  # the caller (Flask's 404 handler) answers
@@ -293,6 +296,97 @@ def demographics_page(id: str):
                 return Response(str(e), status=409, mimetype="text/plain")
     except Exception as e:
         log.error("database error in demographics write: %s: %s", type(e).__name__, e)
+        return _error_page("something went wrong; nothing was saved")
+    _finish(conn, commit=True)
+    return redirect(url_for("main.subject_page", id=id))
+
+
+def _condition_form_from_form(form) -> dict:
+    """The condition form's re-render values, exactly as posted (blank stays
+    blank). Used to keep the user's input on a 422."""
+    return {
+        "code_text": form.get("code_text") or "",
+        "code_system": form.get("code_system") or "",
+        "code": form.get("code") or "",
+        "clinical_status": form.get("clinical_status") or "",
+        "verification_status": form.get("verification_status") or "",
+        "onset_text": form.get("onset_text") or "",
+        "onset_date": form.get("onset_date") or "",
+        "note": form.get("note") or "",
+    }
+
+
+@bp.route("/subjects/<id>/conditions/new", methods=["GET", "POST"])
+def condition_new_page(id: str):
+    """GET,POST /subjects/<id>/conditions/new (spec 6): add a condition.
+    Supersede (new version) and mark entered-in-error are M4.
+
+    POST rules (spec 6.1): Origin check; validation failure re-renders the
+    form with the user's input kept and returns HTTP 422, no database
+    write; an unexpected database error yields a plain 500 page.
+    """
+    if request.method == "GET":
+        conn = _request_conn()
+        try:
+            subject = queries.get_subject(conn, id)
+            if subject is None:
+                abort(404, description="no such subject")
+        except Exception as e:
+            if e.code == 404:
+                raise  # the caller (Flask's 404 handler) answers
+            log.error("database error in condition form: %s: %s", type(e).__name__, e)
+            return _error_page("something went wrong")
+        finally:
+            _finish(conn, commit=False)  # reads only; never commit here
+        return render_template(
+            "condition_new.html", subject=subject, form={},
+            errors=[], field_errors={},
+            clinical_status_options=validation.CLINICAL_STATUS_OPTIONS,
+            verification_status_options=validation.VERIFICATION_STATUS_OPTIONS,
+        )
+
+    if not _origin_ok():
+        return Response("forbidden: Origin does not match", status=403)
+
+    form = request.form
+    fields, errors = validation.validate_condition(form)
+    if errors:
+        conn = _request_conn()
+        try:
+            subject = queries.get_subject(conn, id)
+            if subject is None:
+                abort(404, description="no such subject")
+        except Exception as e:
+            if e.code == 404:
+                raise  # the caller (Flask's 404 handler) answers
+            log.error("database error in condition form: %s: %s", type(e).__name__, e)
+            return _error_page("something went wrong")
+        finally:
+            _finish(conn, commit=False)
+        # re-render with the user's input kept, HTTP 422, no database write
+        field_errors = {}
+        for e in errors:
+            for key in ("code_text", "code_system", "code", "clinical_status",
+                        "verification_status", "onset_date"):
+                if key in e and key not in field_errors:
+                    field_errors[key] = e
+        return render_template(
+            "condition_new.html", subject=subject, form=_condition_form_from_form(form),
+            errors=errors, field_errors=field_errors,
+            clinical_status_options=validation.CLINICAL_STATUS_OPTIONS,
+            verification_status_options=validation.VERIFICATION_STATUS_OPTIONS,
+        ), 422
+
+    conn = _request_conn()
+    try:
+        subject = queries.get_subject(conn, id)
+        if subject is None:
+            abort(404, description="no such subject")
+        queries.create_condition(conn, id, fields)
+    except Exception as e:
+        if e.code == 404:
+            raise  # the caller (Flask's 404 handler) answers
+        log.error("database error creating condition: %s: %s", type(e).__name__, e)
         return _error_page("something went wrong; nothing was saved")
     _finish(conn, commit=True)
     return redirect(url_for("main.subject_page", id=id))

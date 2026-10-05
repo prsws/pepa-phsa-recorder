@@ -32,15 +32,23 @@
   <h2>Current conditions</h2>
   {% if conditions %}
   <table class="striped">
-    <thead><tr><th>Wording</th><th>Status</th><th>Effective class</th></tr></thead>
+    <thead><tr><th>Wording</th><th>Status</th><th>Onset</th><th>Note</th><th>Effective class</th></thead>
     <tbody>
       {% for c in conditions %}
-      <tr><td>{{ c.code_text }}</td><td>{{ c.clinical_status }}</td><td><span class="eff-tag">{{ c.effective_class }}</span></td></tr>
+      <tr>
+        <td>{{ c.code_text }}</td>
+        <td>{{ c.clinical_status }}{% if c.verification_status %} ({{ c.verification_status }}){% endif %}</td>
+        <td>{{ c.onset_text if c.onset_text else (c.onset_date.strftime("%Y-%m-%d") if c.onset_date else "—") }}</td>
+        <td>{{ c.note or "—" }}</td>
+        <td><span class="eff-tag">{{ c.effective_class }}</span></td>
+      </tr>
       {% endfor %}
     </tbody>
   </table>
+  <p><a class="button" href="/subjects/{{ subject.id }}/conditions/new">Add a condition</a></p>
   {% else %}
   <p>None.</p>
+  <p><a class="button" href="/subjects/{{ subject.id }}/conditions/new">Add a condition</a></p>
   {% endif %}
 
   <h2>Current medication requests</h2>

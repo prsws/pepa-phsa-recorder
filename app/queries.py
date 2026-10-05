@@ -235,6 +235,74 @@ class SupersedeConflict(Exception):
 
 
 # ---------------------------------------------------------------------------
+# condition (typed row; one source record + one typed row per condition,
+# spec 4.1). Supersede for conditions is M4.
+# ---------------------------------------------------------------------------
+
+def list_current_conditions(conn, subject_id: str) -> list[dict]:
+    """The subject's current (non-superseded) conditions, read from the
+    phsa.current_condition view (spec: all "current" screens read these
+    views). Includes the view's effective_class."""
+    return conn.execute(
+        """
+        SELECT c.id, c.code_text, c.code_system, c.code,
+               c.clinical_status, c.verification_status,
+               c.onset_text, c.onset_date, c.note,
+               c.source_record_id, e.effective_class
+        FROM phsa.current_condition c
+        JOIN phsa.source_record_effective e ON e.source_record_id = c.source_record_id
+        WHERE c.subject_id = %(subject_id)s AND c.superseded_by IS NULL
+        ORDER BY c.id
+        """,
+        {"subject_id": subject_id},
+    ).fetchall()
+
+
+def create_condition(conn, subject_id: str, d: dict) -> dict:
+    """Write recipe 4.1 for a condition: new source record (a Condition
+    resource, spec 5.2) then the typed row pointing at it.
+
+    Blank fields stay NULL (blank means blank, spec rule 2). Never commits.
+    Returns the new typed row.
+    """
+    new_id = _new_uuid(conn)
+    raw = fhir.condition_json(new_id, subject_id, d)
+    source_record_id = _insert_source_record(conn, "Condition", new_id, raw)
+    row = conn.execute(
+        """
+        INSERT INTO phsa.condition (
+          id, subject_id, source_record_id,
+          code_text, code_system, code,
+          clinical_status, verification_status,
+          onset_text, onset_date, note
+        )
+        VALUES (%(id)s, %(subject_id)s, %(source_record_id)s,
+                %(code_text)s, %(code_system)s, %(code)s,
+                %(clinical_status)s, %(verification_status)s,
+                %(onset_text)s, %(onset_date)s, %(note)s)
+        RETURNING id, subject_id, source_record_id,
+                  code_text, code_system, code,
+                  clinical_status, verification_status,
+                  onset_text, onset_date, note, superseded_by
+        """,
+        {
+            "id": new_id,
+            "subject_id": subject_id,
+            "source_record_id": source_record_id,
+            "code_text": d["code_text"],
+            "code_system": d.get("code_system"),
+            "code": d.get("code"),
+            "clinical_status": d["clinical_status"],
+            "verification_status": d.get("verification_status"),
+            "onset_text": d.get("onset_text"),
+            "onset_date": date.fromisoformat(d["onset_date"]) if d.get("onset_date") else None,
+            "note": d.get("note"),
+        },
+    ).fetchone()
+    return row
+
+
+# ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
 

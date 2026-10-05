@@ -1,5 +1,64 @@
 # CHANGELOG
 
+## M2 (2026-10-04) — conditions: create and view (spec section 10)
+
+Milestone M2: `GET,POST /subjects/<id>/conditions/new` (spec section 6) and
+the subject overview listing the subject's current conditions from
+`phsa.current_condition`, with an add link. Supersede and
+mark-entered-in-error for conditions are M4 and are not built.
+
+- `app/fhir.py`: `condition_json` (spec 5.2): `clinicalStatus` (always, from
+  the form's required select), `verificationStatus` only if entered, `code`
+  as `{"text": ...}` plus `coding` only if both `code_system` and `code`
+  were entered, `subject` = `Patient/<subject_id>`, `onsetString` /
+  `onsetDateTime` / `note` only if entered. Blank means absent, never
+  `null`/`""` (spec rule 2); the HTEST tag comes from the shared
+  `build_resource` (5.0).
+- `app/validation.py`: `validate_condition` — `code_text` and
+  `clinical_status` required; `code_system` and `code` both given or both
+  blank (the schema's `code_pair` CHECK); both selects match the schema
+  CHECK lists exactly (`CLINICAL_STATUS_OPTIONS` =
+  active/recurrence/relapse/inactive/remission/resolved;
+  `VERIFICATION_STATUS_OPTIONS` = unconfirmed/provisional/differential/
+  confirmed/refuted/entered-in-error), an empty option meaning blank where
+  the column is nullable; a value outside the list is an error, not a
+  silent blank.
+- `app/queries.py`: `list_current_conditions` (from the
+  `phsa.current_condition` view) and `create_condition` (write recipe 4.1:
+  uuidv7, source record with `Condition` type, typed row; never commits;
+  `is_test_data` a constant true). The 4.2 recipe is not added here; that is
+  M4.
+- `app/routes.py`: `GET,POST /subjects/<id>/conditions/new` — Origin check
+  on POST, 422 with the input kept on validation failure and no database
+  write, 500 page on unexpected database errors, 302 to the subject page on
+  success; the subject overview now lists current conditions (wording,
+  status, effective class) with a link to add one.
+- `templates/condition_new.html` (new): the form per spec 6.1 — `<label>`
+  wrapping the inputs, `<small>` field errors with `aria-invalid="true"`,
+  the fixed test-data banner (inherited), button labelled **Create**.
+- `templates/subject.html`: the conditions block now shows
+  `onset_text`/`onset_date` and `note` as stored (ISO dates, blank as "—")
+  plus the **Add a condition** link.
+- `tests/test_conditions.py` (new): the condition items of the spec-section-9
+  M2/M3 list — create writes one source record + one typed row with matching
+  ids; every blank optional field is NULL in the row and absent from
+  `resource_raw`; code-pair violations (system only / code only) give 422
+  and write nothing (row counts before and after); `code_text` and
+  `clinical_status` required, 422, nothing written; `resource_raw.id` equals
+  `source_resource_id`; `resource_raw.meta.security` contains HTEST;
+  `content_sha256` equals `sha256(convert_to(resource_raw::text,'UTF8'))`
+  recomputed in a test query; the coded-plus-text case writes both `code`
+  and `coding`; the overview page lists current conditions and the add link;
+  the new-page GET renders.
+- `tests/test_zz_no_leak.py`: the no-leak check now also asserts
+  `phsa.condition` holds 0 rows.
+
+Two readings the spec did not pin down are recorded in `QUESTIONS.md`
+(2026-10-04 M2 entry): the `onsetString`/`onsetDateTime` column mapping, and
+whether the create form should offer `entered-in-error` before M4 lands.
+
+M3 not started.
+
 ## M1 (2026-10-04) — subjects and demographics (create, view, supersede), and the test commit-leak fix
 
 M1 proper (spec section 10: subjects and demographics — create, view,
