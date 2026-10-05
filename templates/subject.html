@@ -32,7 +32,7 @@
   <h2>Current conditions</h2>
   {% if conditions %}
   <table class="striped">
-    <thead><tr><th>Wording</th><th>Status</th><th>Onset</th><th>Note</th><th>Effective class</th></thead>
+    <thead><tr><th>Wording</th><th>Status</th><th>Onset</th><th>Note</th><th>Effective class</th><th></th></thead>
     <tbody>
       {% for c in conditions %}
       <tr>
@@ -41,6 +41,7 @@
         <td>{{ c.onset_text if c.onset_text else (c.onset_date.strftime("%Y-%m-%d") if c.onset_date else "—") }}</td>
         <td>{{ c.note or "—" }}</td>
         <td><span class="eff-tag">{{ c.effective_class }}</span></td>
+        <td><a class="button secondary" href="/conditions/{{ c.id }}/supersede">Supersede (new version)</a></td>
       </tr>
       {% endfor %}
     </tbody>

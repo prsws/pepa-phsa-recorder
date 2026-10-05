@@ -6,7 +6,9 @@
     GET,POST                     /subjects/<id>/demographics
                                  create demographics (if none) or supersede them
     GET,POST                     /subjects/<id>/conditions/new
-                                 add a condition (supersede is M4)
+                                 add a condition
+    GET,POST                     /conditions/<id>/supersede
+                                 supersede a condition (new version)
     GET,POST                     /subjects/<id>/medications/new
                                  add a medication request (supersede is M4)
 
@@ -330,7 +332,7 @@ def _condition_form_from_form(form) -> dict:
 @bp.route("/subjects/<id>/conditions/new", methods=["GET", "POST"])
 def condition_new_page(id: str):
     """GET,POST /subjects/<id>/conditions/new (spec 6): add a condition.
-    Supersede (new version) and mark entered-in-error are M4.
+    Supersede (new version) is M4a; mark entered-in-error is later M4.
 
     POST rules (spec 6.1): Origin check; validation failure re-renders the
     form with the user's input kept and returns HTTP 422, no database
@@ -354,6 +356,7 @@ def condition_new_page(id: str):
             errors=[], field_errors={},
             clinical_status_options=validation.CLINICAL_STATUS_OPTIONS,
             verification_status_options=validation.VERIFICATION_STATUS_OPTIONS,
+            mode="create",
         )
 
     if not _origin_ok():
@@ -404,6 +407,130 @@ def condition_new_page(id: str):
     finally:
         _finish(conn, commit=ok)
     return redirect(url_for("main.subject_page", id=id))
+
+
+def _condition_form_from_row(row: dict) -> dict:
+    """The condition form's pre-fill values, exactly as stored (blank stays
+    blank; a date as ISO YYYY-MM-DD, spec 6.1)."""
+    return {
+        "code_text": row.get("code_text") or "",
+        "code_system": row.get("code_system") or "",
+        "code": row.get("code") or "",
+        "clinical_status": row.get("clinical_status") or "",
+        "verification_status": row.get("verification_status") or "",
+        "onset_text": row.get("onset_text") or "",
+        "onset_date": row["onset_date"].isoformat() if row.get("onset_date") else "",
+        "note": row.get("note") or "",
+    }
+
+
+@bp.route("/conditions/<id>/supersede", methods=["GET", "POST"])
+def condition_supersede_page(id: str):
+    """GET,POST /conditions/<id>/supersede (spec 6, M4a): a new version of
+    an existing condition.
+
+    GET: no such condition is a 404; a condition whose superseded_by is not
+    NULL answers HTTP 409 with a plain message; otherwise the condition form
+    filled with the current row's values (supersede mode of the same
+    condition form the create route uses).
+
+    POST rules: Origin check (6.1); the SAME validation the create-condition
+    route uses; a validation failure re-renders the form with the user's
+    input kept, HTTP 422, no database write; a condition that does not exist
+    is a 404; a condition already superseded (SupersedeConflict) is HTTP 409
+    with a plain message, nothing written; an unexpected database error is a
+    plain 500 page. On success: redirect to the subject page.
+    """
+    if request.method == "GET":
+        conn = _request_conn()
+        try:
+            cond = queries.get_condition(conn, id)
+            if cond is None:
+                abort(404, description="no such condition")
+            if cond["superseded_by"] is not None:
+                return Response(
+                    "this version has already been superseded",
+                    status=409, mimetype="text/plain")
+            subject = queries.get_subject(conn, cond["subject_id"])
+        except HTTPException:
+            raise  # the caller (Flask's 404 handler) answers
+        except Exception as e:
+            log.error("database error in condition supersede form: %s: %s",
+                      type(e).__name__, e)
+            return _error_page("something went wrong")
+        finally:
+            _finish(conn, commit=False)  # reads only; never commit here
+        return render_template(
+            "condition_new.html", subject=subject,
+            form=_condition_form_from_row(cond), errors=[], field_errors={},
+            clinical_status_options=validation.CLINICAL_STATUS_OPTIONS,
+            verification_status_options=validation.VERIFICATION_STATUS_OPTIONS,
+            condition_id=id, mode="supersede",
+        )
+
+    if not _origin_ok():
+        return Response("forbidden: Origin does not match", status=403)
+
+    form = request.form
+    fields, errors = validation.validate_condition(form)
+    if errors:
+        conn = _request_conn()
+        try:
+            cond = queries.get_condition(conn, id)
+            if cond is None:
+                abort(404, description="no such condition")
+            if cond["superseded_by"] is not None:
+                return Response(
+                    "this version has already been superseded",
+                    status=409, mimetype="text/plain")
+            subject = queries.get_subject(conn, cond["subject_id"])
+        except HTTPException:
+            raise  # the caller (Flask's 404 handler) answers
+        except Exception as e:
+            log.error("database error in condition supersede form: %s: %s",
+                      type(e).__name__, e)
+            return _error_page("something went wrong")
+        finally:
+            _finish(conn, commit=False)
+        # re-render with the user's input kept, HTTP 422, no database write
+        field_errors = {}
+        for e in errors:
+            for key in ("code_text", "code_system", "code", "clinical_status",
+                        "verification_status", "onset_date"):
+                if key in e and key not in field_errors:
+                    field_errors[key] = e
+        return render_template(
+            "condition_new.html", subject=subject,
+            form=_condition_form_from_form(form),
+            errors=errors, field_errors=field_errors,
+            clinical_status_options=validation.CLINICAL_STATUS_OPTIONS,
+            verification_status_options=validation.VERIFICATION_STATUS_OPTIONS,
+            condition_id=id, mode="supersede",
+        ), 422
+
+    conn = _request_conn()
+    ok = False
+    try:
+        cond = queries.get_condition(conn, id)
+        if cond is None:
+            abort(404, description="no such condition")
+        if cond["superseded_by"] is not None:
+            return Response(
+                "this version has already been superseded",
+                status=409, mimetype="text/plain")
+        queries.supersede_condition(conn, cond["id"], cond["subject_id"], fields)
+        ok = True
+    except HTTPException:
+        raise  # the caller (Flask's 404 handler) answers
+    except queries.SupersedeConflict as e:
+        return Response(str(e), status=409, mimetype="text/plain")
+    except Exception as e:
+        log.error("database error in condition supersede: %s: %s",
+                  type(e).__name__, e)
+        return _error_page("something went wrong; nothing was saved")
+    finally:
+        _finish(conn, commit=ok)
+    return redirect(url_for("main.subject_page", id=cond["subject_id"]))
 
 
 def _med_form_from_form(form) -> dict:

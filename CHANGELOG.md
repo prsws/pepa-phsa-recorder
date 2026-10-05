@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## M4a (2026-10-05) — supersede a condition
+
+The first step of M4. Supersede a condition: data layer (`app/queries.py`:
+`get_condition`, `supersede_condition` — recipe 4.2; the single permitted
+UPDATE is the `superseded_by` pointer, conflict guard on `superseded_by IS
+NULL`), route (`app/routes.py`: `/conditions/<cid>/supersede` GET/POST, 404
+missing, 409 already superseded, 422 validation with the user's input kept,
+plain 500 page), template mode (`templates/condition_new.html` gains a
+"supersede" mode), the "Supersede (new version)" link on the subject page
+(`templates/subject.html`), and tests
+(`tests/test_condition_supersede.py`, new).
+
 ## Pre-M4-fix (2026-10-05) — two small fixes in `app/routes.py` (not milestone work; M4 not started)
 
 1. **A valid demographics POST for a missing subject answers 404, not 500.**

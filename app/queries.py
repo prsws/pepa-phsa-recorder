@@ -237,8 +237,23 @@ class SupersedeConflict(Exception):
 
 # ---------------------------------------------------------------------------
 # condition (typed row; one source record + one typed row per condition,
-# spec 4.1). Supersede for conditions is M4.
+# spec 4.1). Supersede (new version) is M4a.
 # ---------------------------------------------------------------------------
+
+def get_condition(conn, condition_id: str) -> dict | None:
+    """One row from phsa.condition by id, with all its columns including
+    subject_id and superseded_by, or None if no such row."""
+    return conn.execute(
+        """
+        SELECT id, subject_id, source_record_id,
+               code_text, code_system, code,
+               clinical_status, verification_status,
+               onset_text, onset_date, note, superseded_by
+        FROM phsa.condition WHERE id = %(id)s
+        """,
+        {"id": condition_id},
+    ).fetchone()
+
 
 def list_current_conditions(conn, subject_id: str) -> list[dict]:
     """The subject's current (non-superseded) conditions, read from the
@@ -311,6 +326,41 @@ def create_condition(conn, subject_id: str, d: dict) -> dict:
         },
     ).fetchone()
     return row
+
+
+def supersede_condition(conn, old_id: str, subject_id: str, d: dict) -> dict:
+    """Supersede recipe 4.2 for a condition:
+
+    1. do 4.1 for the new version (new source record, new typed row, same
+       subject_id) — that is create_condition, not a second copy of its
+       INSERT;
+    2. point the old row at it — the old row's own subject_id must match the
+       one the new version was written for (it must; the old row was read
+       earlier in this same request, and a row that vanished or was re-
+       written behind us must not be pointed at a version of someone else's
+       condition);
+    3. if the old row was already superseded (0 rows matched) raise
+       SupersedeConflict; the caller rolls back and returns HTTP 409.
+
+    Never commits. Returns the new typed row.
+    """
+    new_row = create_condition(conn, subject_id, d)
+    # The single permitted UPDATE (append-only rule, spec 0.3). The
+    # subject_id in the WHERE is part of the "point the old one at it"
+    # safety check above; the IS NULL is the conflict guard.
+    cur = conn.execute(
+        """
+        UPDATE phsa.condition SET superseded_by = %(new)s
+        WHERE id = %(old)s AND subject_id = %(subject_id)s
+          AND superseded_by IS NULL
+        """,
+        {"new": new_row["id"], "old": old_id, "subject_id": subject_id},
+    )
+    if cur.rowcount == 0:
+        raise SupersedeConflict(
+            "that record was already superseded; nothing was changed"
+        )
+    return new_row
 
 
 # ---------------------------------------------------------------------------
