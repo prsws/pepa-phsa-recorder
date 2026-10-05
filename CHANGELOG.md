@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## M5a (2026-10-05) — seed loader for the synthetic fixture person SUBJ-01
+
+`seed/subj01.json`: the fixture values, all strings.
+`scripts/seed_subj01.py`: dry run only — loads into the test database through
+the app's own validation and data-layer functions, prints counts, rolls back;
+nothing is kept; run with `python -m scripts.seed_subj01`.
+`get_subject_by_fixture_id` added in `app/queries.py`.
+9 tests in `tests/test_seed_subj01.py`. There is no way yet to write to the
+real database.
+
 ## M4f (2026-10-05) — source check for the banned words; M4 complete
 
 New `tests/test_crs_words.py` (9 tests): `edit`, `updat*`, `delet*`,

@@ -111,6 +111,15 @@ def get_subject(conn, subject_id: str) -> dict | None:
     ).fetchone()
 
 
+def get_subject_by_fixture_id(conn, fixture_id: str) -> dict | None:
+    """The subject that carries this fixture id, or None. Read only."""
+    return conn.execute(
+        "SELECT id, label, fixture_id, created_at FROM phsa.subject"
+        " WHERE fixture_id = %(fixture_id)s",
+        {"fixture_id": fixture_id},
+    ).fetchone()
+
+
 # ---------------------------------------------------------------------------
 # subject_demographics (typed row; one source record + one typed row per
 # demographics entry, spec 4.1)
