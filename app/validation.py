@@ -15,6 +15,8 @@ Rules (spec 6.1):
 - timing_when: multi-select from a fixed list of FHIR event-timing codes
 """
 
+from decimal import Decimal, InvalidOperation
+
 SEX_OPTIONS = ("male", "female", "other", "unknown")
 # FHIR event timing codes (spec 6.1: one constant in code, easy to edit).
 TIMING_WHEN_OPTIONS = (
@@ -34,6 +36,31 @@ MED_STATUS_OPTIONS = (
     "cancelled", "entered-in-error", "draft", "unknown",
 )
 PERIOD_UNIT_OPTIONS = ("s", "min", "h", "d", "wk", "mo", "a")
+
+
+# Most significant digits accepted for a decimal field. Up to 15 digits the
+# number written to the stored document and the number in the typed row are
+# the same digits.
+MAX_DECIMAL_DIGITS = 15
+
+
+def _positive_decimal(value) -> Decimal | None:
+    """The typed text as an exact positive decimal, or None if it is not one.
+
+    Parsed with Decimal, never float: a float cannot hold 0.4 exactly, and the
+    rounding error would be stored (spec rule 2: never normalize a value).
+    Rejected: text that is not a number, NaN, Infinity, zero, negatives, and
+    numbers with more than MAX_DECIMAL_DIGITS significant digits.
+    """
+    try:
+        number = Decimal(str(value).strip())
+    except (InvalidOperation, ValueError):
+        return None
+    if not number.is_finite() or number <= 0:
+        return None
+    if len(number.as_tuple().digits) > MAX_DECIMAL_DIGITS:
+        return None
+    return number
 
 
 def _text(value) -> str | None:
@@ -178,13 +205,8 @@ def validate_medication_request(form) -> tuple[dict, list[str]]:
     dose_unit_given = d["dose_unit"] is not None
     value = None
     if dose_given:
-        try:
-            value = float(form.get("dose_value").strip())
-        except ValueError:
-            value = None
-            errors.append("dose_value must be a positive number, or left blank")
-        if value is not None and value <= 0:
-            value = None
+        value = _positive_decimal(form.get("dose_value"))
+        if value is None:
             errors.append("dose_value must be a positive number, or left blank")
     if dose_given != dose_unit_given:
         d["dose_value"] = None
@@ -215,15 +237,8 @@ def validate_medication_request(form) -> tuple[dict, list[str]]:
     # period: a positive number (FHIR periods can be fractional).
     period_raw = _text(form.get("period"))
     if period_raw is not None:
-        try:
-            period = float(period_raw)
-            if period > 0:
-                d["period"] = period
-            else:
-                d["period"] = None
-                errors.append("period must be a positive number")
-        except ValueError:
-            d["period"] = None
+        d["period"] = _positive_decimal(period_raw)
+        if d["period"] is None:
             errors.append("period must be a positive number")
 
     date_raw = _text(form.get("authored_on"))

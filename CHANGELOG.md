@@ -1,5 +1,36 @@
 # CHANGELOG
 
+## Post-M3 fix (2026-10-05) — decimal dose and period values are stored exactly
+
+Written by the reviewer at José's direction, not by the builder.
+
+A defect from M3, found by M4b's round-trip test: a dose typed as `0.4` was
+stored as `0.4000000000000000222044604925031308...`. `app/validation.py`
+parsed `dose_value` and `period` with `float()`, and `app/queries.py` then
+called `Decimal()` on that float, which keeps the float's binary rounding
+error. Spec rule 2: never normalize a value. M3's tests used only whole
+numbers, so they did not see it. `NaN` and `Infinity` were also accepted as a
+dose or a period.
+
+- `app/validation.py`: `dose_value` and `period` are parsed with `Decimal`
+  from the typed text (`_positive_decimal`). Rejected with the existing 422
+  messages: text that is not a number, NaN, Infinity, zero, negatives, and
+  more than 15 significant digits (`MAX_DECIMAL_DIGITS`; up to 15 digits the
+  stored document and the typed row hold the same digits).
+- `app/queries.py`, `create_medication_request`: `Decimal(str(x))`, so a
+  float from any caller is stored as the digits it prints.
+- `app/fhir.py`: `_json_number` writes the dose value and the period to the
+  document as a plain JSON number (500, 0.4, 0.5). A whole dose is now `500`
+  in the document, where it was `500.0`.
+- `tests/test_medication_decimals.py` (new, 24 tests): typed row and stored
+  document hold the typed digits for 0.4, 0.125, 2.5, 22, 81, 500 and for
+  periods 0.5, 1, 1.5, 12; bad values give 422 and write nothing; a float
+  handed to the data layer is stored exactly. Without the fix 12 of the 24
+  fail.
+
+No schema change. Nothing had been written to the real database, so no
+stored value needs correcting. 110 tests pass (86 + 24).
+
 ## M4a (2026-10-05) — supersede a condition
 
 The first step of M4. Supersede a condition: data layer (`app/queries.py`:

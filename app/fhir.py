@@ -5,6 +5,7 @@ strings. A blank means blank: missing data stays absent from the JSON.
 """
 
 import json
+from decimal import Decimal
 
 HTEST_TAG = {
     "system": "http://terminology.hl7.org/CodeSystem/v3-ActReason",
@@ -121,6 +122,15 @@ def condition_json(resource_id: str, subject_id: str, d) -> str:
     })
 
 
+def _json_number(value):
+    """A decimal as a plain JSON number with the digits that were entered
+    (500, 0.4, 0.5): a whole number as an int, anything else as a float.
+    Going through str() first means a float from any caller contributes the
+    digits it prints, not its binary expansion."""
+    number = Decimal(str(value))
+    return int(number) if number == number.to_integral_value() else float(number)
+
+
 def medication_request_json(resource_id: str, subject_id: str, d) -> str:
     """MedicationRequest resource (spec 5.3), for phsa.medication_request.
 
@@ -146,7 +156,7 @@ def medication_request_json(resource_id: str, subject_id: str, d) -> str:
     if d.get("frequency") is not None:
         repeat["frequency"] = d["frequency"]
     if d.get("period") is not None:
-        repeat["period"] = d["period"]
+        repeat["period"] = _json_number(d["period"])
     if d["period_unit"]:
         repeat["periodUnit"] = d["period_unit"]
     if d["timing_when"]:
@@ -157,7 +167,7 @@ def medication_request_json(resource_id: str, subject_id: str, d) -> str:
     dose_and_rate = None
     if d["dose_value"] is not None and d["dose_unit"]:
         dose_quantity = {
-            "value": d["dose_value"],
+            "value": _json_number(d["dose_value"]),
             "unit": d["dose_unit"],
         }
         if d["dose_unit_code"]:  # system+code only when a UCUM code was entered
