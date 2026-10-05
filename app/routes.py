@@ -10,7 +10,9 @@
     GET,POST                     /conditions/<id>/supersede
                                  supersede a condition (new version)
     GET,POST                     /subjects/<id>/medications/new
-                                 add a medication request (supersede is M4)
+                                 add a medication request
+    GET,POST                     /medications/<id>/supersede
+                                   supersede a medication request (new version)
 
 Page rules (spec 6.1): CRS button labels only, the fixed test-data banner
 (every page, in base.html), HTTP 422 with the form re-rendered on
@@ -533,6 +535,28 @@ def condition_supersede_page(id: str):
     return redirect(url_for("main.subject_page", id=cond["subject_id"]))
 
 
+def _med_form_from_row(row: dict) -> dict:
+    """The medication request form's pre-fill values, exactly as stored
+    (blank stays blank; a date as ISO YYYY-MM-DD, spec 6.1)."""
+    return {
+        "medication_text": row.get("medication_text") or "",
+        "medication_code_system": row.get("medication_code_system") or "",
+        "medication_code": row.get("medication_code") or "",
+        "status": row.get("status") or "",
+        "authored_on": row["authored_on"].isoformat() if row.get("authored_on") else "",
+        "sig_text": row.get("sig_text") or "",
+        "dose_value": "" if row.get("dose_value") is None else str(row["dose_value"]),
+        "dose_unit": row.get("dose_unit") or "",
+        "dose_unit_code": row.get("dose_unit_code") or "",
+        "route_text": row.get("route_text") or "",
+        "frequency": "" if row.get("frequency") is None else str(row["frequency"]),
+        "period": "" if row.get("period") is None else str(row["period"]),
+        "period_unit": row.get("period_unit") or "",
+        "timing_when": list(row["timing_when"]) if row.get("timing_when") else [],
+        "note": row.get("note") or "",
+    }
+
+
 def _med_form_from_form(form) -> dict:
     """The medication request form's re-render values, exactly as posted
     (blank stays blank). Used to keep the user's input on a 422."""
@@ -642,6 +666,120 @@ def medication_request_new_page(id: str):
     finally:
         _finish(conn, commit=ok)
     return redirect(url_for("main.subject_page", id=id))
+
+
+@bp.route("/medications/<id>/supersede", methods=["GET", "POST"])
+def medication_supersede_page(id: str):
+    """GET,POST /medications/<id>/supersede (spec 6, M4b): a new version of
+    an existing medication request.
+
+    GET: no such medication request is a 404; a version whose superseded_by
+    is not NULL answers HTTP 409 with a plain message; otherwise the
+    medication form filled with the current row's values (supersede mode of
+    the same medication form the create route uses).
+
+    POST rules: Origin check (6.1); the SAME validation the
+    create-medication route uses; a validation failure re-renders the form
+    with the user's input kept, HTTP 422, no database write; a medication
+    request that does not exist is a 404; one already superseded
+    (SupersedeConflict) is HTTP 409 with a plain message, nothing written;
+    an unexpected database error is a plain 500 page. On success: redirect
+    to the subject page.
+    """
+    if request.method == "GET":
+        conn = _request_conn()
+        try:
+            med = queries.get_medication_request(conn, id)
+            if med is None:
+                abort(404, description="no such medication request")
+            if med["superseded_by"] is not None:
+                return Response(
+                    "this version has already been superseded",
+                    status=409, mimetype="text/plain")
+            subject = queries.get_subject(conn, med["subject_id"])
+        except HTTPException:
+            raise  # the caller (Flask's 404 handler) answers
+        except Exception as e:
+            log.error("database error in medication supersede form: %s: %s",
+                      type(e).__name__, e)
+            return _error_page("something went wrong")
+        finally:
+            _finish(conn, commit=False)  # reads only; never commit here
+        return render_template(
+            "medication_request_new.html", subject=subject,
+            form=_med_form_from_row(med), errors=[], field_errors={},
+            status_options=validation.MED_STATUS_OPTIONS,
+            period_unit_options=validation.PERIOD_UNIT_OPTIONS,
+            timing_when_options=validation.TIMING_WHEN_OPTIONS,
+            medication_id=id, mode="supersede",
+        )
+
+    if not _origin_ok():
+        return Response("forbidden: Origin does not match", status=403)
+
+    form = request.form
+    fields, errors = validation.validate_medication_request(form)
+    if errors:
+        conn = _request_conn()
+        try:
+            med = queries.get_medication_request(conn, id)
+            if med is None:
+                abort(404, description="no such medication request")
+            if med["superseded_by"] is not None:
+                return Response(
+                    "this version has already been superseded",
+                    status=409, mimetype="text/plain")
+            subject = queries.get_subject(conn, med["subject_id"])
+        except HTTPException:
+            raise  # the caller (Flask's 404 handler) answers
+        except Exception as e:
+            log.error("database error in medication supersede form: %s: %s",
+                      type(e).__name__, e)
+            return _error_page("something went wrong")
+        finally:
+            _finish(conn, commit=False)
+        # re-render with the user's input kept, HTTP 422, no database write
+        field_errors = {}
+        for e in errors:
+            for key in ("medication_text", "medication_code_system",
+                        "medication_code", "status", "authored_on",
+                        "dose_value", "dose_unit", "frequency", "period",
+                        "period_unit"):
+                if key in e and key not in field_errors:
+                    field_errors[key] = e
+        return render_template(
+            "medication_request_new.html", subject=subject,
+            form=_med_form_from_form(form),
+            errors=errors, field_errors=field_errors,
+            status_options=validation.MED_STATUS_OPTIONS,
+            period_unit_options=validation.PERIOD_UNIT_OPTIONS,
+            timing_when_options=validation.TIMING_WHEN_OPTIONS,
+            medication_id=id, mode="supersede",
+        ), 422
+
+    conn = _request_conn()
+    ok = False
+    try:
+        med = queries.get_medication_request(conn, id)
+        if med is None:
+            abort(404, description="no such medication request")
+        if med["superseded_by"] is not None:
+            return Response(
+                "this version has already been superseded",
+                status=409, mimetype="text/plain")
+        queries.supersede_medication_request(conn, med["id"], med["subject_id"], fields)
+        ok = True
+    except HTTPException:
+        raise  # the caller (Flask's 404 handler) answers
+    except queries.SupersedeConflict as e:
+        return Response(str(e), status=409, mimetype="text/plain")
+    except Exception as e:
+        log.error("database error in medication supersede: %s: %s",
+                  type(e).__name__, e)
+        return _error_page("something went wrong; nothing was saved")
+    finally:
+        _finish(conn, commit=ok)
+    return redirect(url_for("main.subject_page", id=med["subject_id"]))
 
 
 @bp.get("/healthz")

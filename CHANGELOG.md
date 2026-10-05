@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## M4b (2026-10-05) — supersede a medication request
+
+The second step of M4. Supersede a medication request: data layer
+(`app/queries.py`: `get_medication_request`, `supersede_medication_request`
+— recipe 4.2; the single permitted UPDATE is the `superseded_by` pointer,
+conflict guard on `superseded_by IS NULL`), route (`app/routes.py`:
+`/medications/<id>/supersede` GET/POST, 404 missing, 409 already superseded,
+422 validation with the user's input kept, plain 500 page), template mode
+(`templates/medication_request_new.html` gains a "supersede" mode), the
+"Supersede (new version)" link on the subject page
+(`templates/subject.html`), and tests
+(`tests/test_medication_supersede.py`, new, including a round-trip test that
+shows the current row exactly in the supersede form and posts the same values
+back, asserting the new row equals the old row in every compared column).
+
+The round-trip test is what found the decimal defect recorded in the
+Post-M3 fix entry below (a dose typed as `0.4` was stored as the float
+`0.400000000000000022...`); M4b was finished only after that fix landed.
+
 ## Post-M3 fix (2026-10-05) — decimal dose and period values are stored exactly
 
 Written by the reviewer at José's direction, not by the builder.

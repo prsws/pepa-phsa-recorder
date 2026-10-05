@@ -1,16 +1,21 @@
 {% extends "base.html" %}
-{% block title %}Add a medication request · {{ subject.label }} · PHSA Recorder{% endblock %}
+{% block title %}{% if mode == "supersede" %}Supersede (new version){% else %}Add a medication request{% endif %} · {{ subject.label }} · PHSA Recorder{% endblock %}
 {% block content %}
 <article>
+  {% if mode == "supersede" %}
+  <h1>New version of an existing medication request — {{ subject.label }}</h1>
+  {% else %}
   <h1>Add a medication request — {{ subject.label }}</h1>
+  {% endif %}
   {% if errors %}
   <article class="negative">
     {% for e in errors %}<p>{{ e }}</p>{% endfor %}
   </article>
   {% endif %}
 
-  <h2>Create</h2>
-  <form method="post" action="/subjects/{{ subject.id }}/medications/new">
+  <h2>{% if mode == "supersede" %}Supersede (new version){% else %}Create{% endif %}</h2>
+  <form method="post"
+        action="{% if mode == 'supersede' %}/medications/{{ medication_id }}/supersede{% else %}/subjects/{{ subject.id }}/medications/new{% endif %}">
     <label>
       Medication <small>(the medication as the source wrote it; required)</small>
       <input type="text" name="medication_text" value="{{ form.medication_text or '' }}"
@@ -106,7 +111,9 @@
       <textarea name="note" rows="3">{{ form.note or '' }}</textarea>
     </label>
     <p>
-      <button class="secondary" type="submit">Create</button>
+      <button class="secondary" type="submit">
+        {% if mode == "supersede" %}Supersede (new version){% else %}Create{% endif %}
+      </button>
       <a href="/subjects/{{ subject.id }}">cancel</a>
     </p>
   </form>
