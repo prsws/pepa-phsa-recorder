@@ -244,3 +244,55 @@ M4d question, 5 Oct 2026 (builder): `tests/test_hidden_entered_in_error.py::test
 - Tried 3: kept the subject id as the database's uuid type (not `str`) in case of a uuid-vs-text comparison mismatch — same `StopIteration`.
 - The 8 sibling page tests in the same file pass; only this data-layer count test fails. Per the stop rule, stopping after 3 attempts. The work is left uncommitted; the one failing test is the only failure in the suite (146 of 147 pass).
 Resolved 5 Oct 2026: the M4d count test read through a second connection, which cannot see uncommitted rows. It now reads on the test's own connection. The app code was correct.
+
+## 2026-10-06 (M6): browser check of the two unverified htmx 4 points (spec section 7) — both confirmed
+
+Entry by the reviewer, added at José's word. Nothing above is changed.
+
+Spec section 7 left two points to be checked in a real browser during M6.
+
+1. **Is the `HX-Request` request header still sent by htmx 4?** Yes. In the
+   source of htmx 4.0.0 (the vendored `static/vendor/htmx.min.js`, sha256
+   `e484d917...`) every request carries `HX-Request: true`. In the browser,
+   every htmx request was answered by the server with a table-row fragment,
+   which `app/routes.py` returns only when that header is exactly `true`.
+
+2. **Does setting `htmx.config.noSwap` from a script behave as the migration
+   guide shows?** Yes. `static/app.js` sets it after htmx loads, and in the
+   browser `htmx.config.noSwap` read back as `[204, 304, 404, 409, "5xx"]`.
+   A 409 answer was not swapped into the table.
+
+How it was checked:
+
+- 5 Oct 2026, on a mock with no database (the same htmx file and the same
+  row and form markup, driven by a headless Chromium): 21 checks passed,
+  including a 500, a 409 and a 404 kept out of the page, a 422 swapped in,
+  and a refused confirmation sending no request.
+- 6 Oct 2026, 04:21 to 04:24, against the running app pointed at the TEST
+  database, in Chrome, on a throwaway subject, with José watching:
+  supersede in place; a 422 bringing the form back with its message; a
+  successful supersede replacing the row; add inside the table; mark
+  entered-in-error with the confirmation refused (no request) and accepted
+  (row replaced); a dose shown as exactly `0.4`; a stale form answered 409
+  with the plain line shown and nothing swapped. The test database was
+  emptied afterwards and the suite rerun: 232 passed.
+
+Two things differ from the letter of spec section 7, by the reviewer's
+decision and told to José:
+
+- htmx 4 raises `htmx:response:error` for every status of 400 or more, so
+  also for a 422. The script therefore shows no error line for a 422.
+- 404 and 409 are in `noSwap` beside `5xx`, each with its own plain line,
+  because their plain-text answers would otherwise be swapped into a row.
+
+Not seen against the running app, only on the mock: the line for a 5xx and
+for a 404.
+
+Noticed during the check, not fixed, moved by José to the next stage:
+
+- With a blank wording, the "Code" field of the condition form is also
+  marked invalid with "code_text is required". `app/routes.py` matches an
+  error to a field by substring, and "code" is inside "code_text". Display
+  only; nothing wrong is saved. It dates from M2.
+- The history table is cramped at the page's width; dates and ids wrap over
+  several lines.
