@@ -5,9 +5,9 @@
   <td>{{ c.note or "—" }}</td>
   <td><span class="eff-tag">{{ c.effective_class }}</span></td>
   <td>
-    <a class="button secondary" href="/conditions/{{ c.id }}/supersede">Supersede (new version)</a>
+    <a class="button secondary" href="/conditions/{{ c.id }}/supersede" hx-get="/conditions/{{ c.id }}/supersede" hx-target="#condition-{{ c.id }}" hx-swap="outerHTML">Supersede (new version)</a>
     {% if c.verification_status != "entered-in-error" %}
-    <form method="post" action="/conditions/{{ c.id }}/mark-error">
+    <form method="post" action="/conditions/{{ c.id }}/mark-error" hx-post="/conditions/{{ c.id }}/mark-error" hx-target="#condition-{{ c.id }}" hx-swap="outerHTML" hx-confirm="Mark this entry as entered-in-error? A new version is written; nothing is removed.">
       <button type="submit" class="button secondary">Mark entered-in-error</button>
     </form>
     {% endif %}

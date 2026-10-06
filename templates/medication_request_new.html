@@ -16,7 +16,8 @@
 
   <h2>{% if mode == "supersede" %}Supersede (new version){% else %}Create{% endif %}</h2>
   <form method="post"
-        action="{% if mode == 'supersede' %}/medications/{{ medication_id }}/supersede{% else %}/subjects/{{ subject.id }}/medications/new{% endif %}">
+        action="{% if mode == 'supersede' %}/medications/{{ medication_id }}/supersede{% else %}/subjects/{{ subject.id }}/medications/new{% endif %}"
+        {% if fragment %}hx-post="{% if mode == 'supersede' %}/medications/{{ medication_id }}/supersede{% else %}/subjects/{{ subject.id }}/medications/new{% endif %}" hx-target="#{% if mode == 'supersede' %}medication-{{ medication_id }}{% else %}medication-add{% endif %}" hx-swap="outerHTML"{% endif %}>
     <label>
       Medication <small>(the medication as the source wrote it; required)</small>
       <input type="text" name="medication_text" value="{{ form.medication_text or '' }}"

@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## M6b (2026-10-05) — htmx 4 attributes in the pages, and the one small script
+
+The supersede links and the mark entered-in-error forms (each with `hx-confirm`)
+on the subject page, the add rows, and the two forms when sent as fragments
+now carry `hx-target` (their own row, or the add row) and `hx-swap="outerHTML"`.
+The add link now sits in a row inside each table. `static/app.js`
+(`htmx.config.noSwap` plus one `htmx:response:error` listener) keeps 5xx, 404
+and 409 answers out of the page and shows one plain line for them; a 422 is
+still swapped in. Every page still works with JavaScript off. 9 tests in
+`tests/test_htmx_attributes.py`. The browser behaviour was checked by the
+reviewer with htmx 4.0.0, and the browser check against the running app
+follows this step. M6 and the build are complete in code.
+
 ## M6a (2026-10-05) — htmx fragment responses, server side (spec section 7)
 
 When a request carries `HX-Request: true`, supersede, mark entered-in-error

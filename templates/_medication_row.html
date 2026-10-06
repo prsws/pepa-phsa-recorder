@@ -3,9 +3,9 @@
   <td>{{ m.status }}</td>
   <td><span class="eff-tag">{{ m.effective_class }}</span></td>
   <td>
-    <a class="button secondary" href="/medications/{{ m.id }}/supersede">Supersede (new version)</a>
+    <a class="button secondary" href="/medications/{{ m.id }}/supersede" hx-get="/medications/{{ m.id }}/supersede" hx-target="#medication-{{ m.id }}" hx-swap="outerHTML">Supersede (new version)</a>
     {% if m.status != "entered-in-error" %}
-    <form method="post" action="/medications/{{ m.id }}/mark-error">
+    <form method="post" action="/medications/{{ m.id }}/mark-error" hx-post="/medications/{{ m.id }}/mark-error" hx-target="#medication-{{ m.id }}" hx-swap="outerHTML" hx-confirm="Mark this entry as entered-in-error? A new version is written; nothing is removed.">
       <button type="submit" class="button secondary">Mark entered-in-error</button>
     </form>
     {% endif %}

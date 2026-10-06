@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/static/vendor/pico.min.css">
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/vendor/htmx.min.js"></script>
+  <script src="/static/app.js"></script>
 </head>
 <body>
   <main class="container">
@@ -16,6 +17,7 @@
     <article>
       <p><strong>TEST DATA ONLY. Synthetic fixtures. Not a medical record.</strong></p>
     </article>
+    <p id="request-problem" role="alert" hidden></p>
     {% block content %}{% endblock %}
   </main>
 </body>

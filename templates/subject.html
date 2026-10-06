@@ -37,9 +37,9 @@
       {% for c in conditions %}
       {% include "_condition_row.html" %}
       {% endfor %}
+      {% include "_condition_add_row.html" %}
     </tbody>
   </table>
-  <p><a class="button" href="/subjects/{{ subject.id }}/conditions/new">Add a condition</a></p>
   {% else %}
   <p>None.</p>
   <p><a class="button" href="/subjects/{{ subject.id }}/conditions/new">Add a condition</a></p>
@@ -60,9 +60,9 @@
       {% for m in medications %}
       {% include "_medication_row.html" %}
       {% endfor %}
+      {% include "_medication_add_row.html" %}
     </tbody>
   </table>
-  <p><a class="button" href="/subjects/{{ subject.id }}/medications/new">Add a medication request</a></p>
   {% else %}
   <p>None.</p>
   <p><a class="button" href="/subjects/{{ subject.id }}/medications/new">Add a medication request</a></p>
